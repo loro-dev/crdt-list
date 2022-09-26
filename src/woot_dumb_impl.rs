@@ -222,4 +222,13 @@ mod woot_impl_test {
             crate::test::test::<WootImpl>(i, 2, 1000);
         }
     }
+
+    #[test]
+    fn run3() {
+        // FIXME: need to impl pending array in test.rs
+        // TODO: add can_apply method to crdt
+        for i in 0..100 {
+            crate::test::test::<WootImpl>(i, 3, 10);
+        }
+    }
 }
