@@ -64,12 +64,6 @@ impl<T: TestFramework> Actor<T> {
                 }
             }
 
-            if pending_length == pending.len() {
-                dbg!(&self.container);
-                dbg!(pending);
-                panic!("dead loop");
-            }
-
             pending_length = pending.len();
         }
     }

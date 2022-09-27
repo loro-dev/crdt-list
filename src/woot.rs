@@ -33,7 +33,8 @@ pub fn integrate<T: Woot>(
     for (_, iter_op) in T::iter(container, left, right)
         .filter(|(_, op)| !set.contain(T::left(op)) && !set.contain(T::right(op)))
     {
-        if T::id(iter_op) == prev || T::id(iter_op) == next {
+        if T::id(iter_op) == left || T::id(iter_op) == right {
+            // left cannot be next, and right cannot be prev
             continue;
         }
 
@@ -43,11 +44,6 @@ pub fn integrate<T: Woot>(
             next = T::id(iter_op);
             break;
         }
-    }
-
-    if prev == left && next == right {
-        dbg!(container);
-        panic!("Something is off");
     }
 
     integrate::<T>(container, to_insert, prev, next);

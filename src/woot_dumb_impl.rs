@@ -208,11 +208,6 @@ impl woot::Woot for WootImpl {
 
 impl TestFramework for WootImpl {
     fn is_content_eq(a: &Self::Container, b: &Self::Container) -> bool {
-        if a.content != b.content {
-            dbg!(a);
-            dbg!(b);
-        }
-
         a.content.eq(&b.content)
     }
 
