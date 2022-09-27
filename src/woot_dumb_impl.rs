@@ -264,19 +264,9 @@ mod woot_impl_test {
     }
 
     #[test]
-    fn issue() {
-        crate::test::test::<WootImpl>(10, 3, 76);
-    }
-
-    #[test]
     fn run3() {
-        // FIXME: need to impl pending array in test.rs
-        // TODO: add can_apply method to crdt
         for seed in 0..100 {
-            for round in 10..100 {
-                println!("{} {}", seed, round);
-                crate::test::test::<WootImpl>(seed, 3, round);
-            }
+            crate::test::test::<WootImpl>(seed, 3, 1000);
         }
     }
 

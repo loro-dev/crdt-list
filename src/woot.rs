@@ -33,7 +33,7 @@ pub fn integrate<T: Woot>(
     for (_, iter_op) in T::iter(container, left, right)
         .filter(|(_, op)| !set.contain(T::left(op)) && !set.contain(T::right(op)))
     {
-        if T::id(iter_op) == prev {
+        if T::id(iter_op) == prev || T::id(iter_op) == next {
             continue;
         }
 
