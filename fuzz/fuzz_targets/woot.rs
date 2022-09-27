@@ -1,8 +1,6 @@
 #![no_main]
-use std::collections::HashSet;
 
-use crdt_woot::{crdt::OpSet, test, woot, woot_dumb_impl::WootImpl};
+use crdt_woot::{test, test::Action, woot_dumb_impl::WootImpl};
 use libfuzzer_sys::fuzz_target;
-use rand::Rng;
 
-fuzz_target!(|data: (usize, usize, u64)| { test::test::<WootImpl>(data.2, 10, data.1 % 1000 + 1) });
+fuzz_target!(|data: Vec<Action>| { test::test_with_actions::<WootImpl>(5, &data) });

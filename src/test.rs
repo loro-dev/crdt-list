@@ -1,8 +1,9 @@
+use arbitrary::Arbitrary;
 use std::marker::PhantomData;
 
 use rand::{rngs::StdRng, Rng};
 
-use crate::crdt::Crdt;
+use crate::crdt::ListCrdt;
 
 #[derive(Debug)]
 struct Actor<T: TestFramework> {
@@ -13,16 +14,18 @@ struct Actor<T: TestFramework> {
     _phantom: PhantomData<T>,
 }
 
-pub trait TestFramework: Crdt {
+pub trait TestFramework: ListCrdt {
     fn is_content_eq(a: &Self::Container, b: &Self::Container) -> bool;
     fn new_container(id: usize) -> Self::Container;
-    fn new_op(rng: &mut impl Rng, container: &mut Self::Container) -> Self::OpUnit;
+    /// pos is just a hint, it may not be a valid position
+    fn new_op(rng: &mut impl Rng, container: &mut Self::Container, pos: usize) -> Self::OpUnit;
 }
 
-#[derive(Clone)]
-enum Action {
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub enum Action {
     Sync { from: usize, to: usize },
-    NewOp { at: usize },
+    NewOp { client_id: usize, pos: usize },
 }
 
 impl<T: TestFramework> Actor<T> {
@@ -45,7 +48,8 @@ impl<T: TestFramework> Actor<T> {
                 Action::Sync { from, to }
             }
             1 => Action::NewOp {
-                at: rng.gen_range(0..num_containers),
+                client_id: rng.gen_range(0..num_containers),
+                pos: rng.gen_range(0..usize::MAX),
             },
             _ => unreachable!(),
         }
@@ -84,21 +88,21 @@ impl<T: TestFramework> Actor<T> {
         self.apply_pending();
     }
 
-    fn new_op(&mut self, rng: &mut impl Rng) {
-        let value = T::new_op(rng, &mut self.container);
+    fn new_op(&mut self, rng: &mut impl Rng, pos: usize) {
+        let value = T::new_op(rng, &mut self.container, pos);
         self.ops[self.idx].push(value.clone());
         T::integrate(&mut self.container, value);
     }
 
-    fn run(containers: &mut [Self], rng: &mut impl Rng, n_actions: usize) {
+    fn run(actors: &mut [Self], rng: &mut impl Rng, n_actions: usize) {
         for _ in 0..n_actions {
-            let action = Self::gen(rng, containers.len());
+            let action = Self::gen(rng, actors.len());
             match action {
                 Action::Sync { from, to } => {
-                    let (to_, from_) = arref::array_mut_ref!(containers, [to, from]);
+                    let (to_, from_) = arref::array_mut_ref!(actors, [to, from]);
                     to_.sync(from_);
                 }
-                Action::NewOp { at } => containers[at].new_op(rng),
+                Action::NewOp { client_id: at, pos } => actors[at].new_op(rng, pos),
             }
         }
     }
@@ -122,4 +126,32 @@ pub fn test<T: TestFramework>(seed: u64, n_container: usize, round: usize) {
 
     Actor::run(&mut containers, &mut rng, round);
     Actor::check(&mut containers);
+}
+
+pub fn test_with_actions<T: TestFramework>(n_container: usize, actions: &[Action]) {
+    let mut rng: StdRng = rand::SeedableRng::seed_from_u64(123);
+    let mut actors: Vec<Actor<T>> = Vec::new();
+    for i in 0..n_container {
+        actors.push(Actor::new(i, n_container));
+    }
+
+    for action in actions {
+        match action {
+            Action::Sync { from, to } => {
+                let to = *to % n_container;
+                let mut from = *from % n_container;
+                if from == to {
+                    from = (from + 1) % n_container;
+                }
+
+                let (to_, from_) = arref::array_mut_ref!(&mut actors, [to, from]);
+                to_.sync(from_);
+            }
+            Action::NewOp { client_id: at, pos } => {
+                actors[*at % n_container].new_op(&mut rng, *pos)
+            }
+        }
+    }
+
+    Actor::check(&mut actors);
 }

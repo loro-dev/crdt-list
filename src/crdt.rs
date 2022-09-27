@@ -5,14 +5,14 @@ pub trait OpSet<Op, OpId>: Default {
     fn contain(&self, id: OpId) -> bool;
 }
 
-pub trait Crdt {
+pub trait ListCrdt {
     type OpUnit: Clone + Debug;
     type OpId: Eq + Copy + Debug;
     type Container: Debug;
     type Set: OpSet<Self::OpUnit, Self::OpId>;
     type Iterator<'a>: Iterator<Item = (usize, &'a Self::OpUnit)>
     where
-        <Self as Crdt>::OpUnit: 'a;
+        <Self as ListCrdt>::OpUnit: 'a;
 
     /// inclusive end
     fn iter(container: &Self::Container, from: Self::OpId, to: Self::OpId) -> Self::Iterator<'_>;

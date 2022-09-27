@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    crdt::{Crdt, OpSet},
+    crdt::{ListCrdt, OpSet},
     test::TestFramework,
     woot,
 };
@@ -99,8 +99,8 @@ impl<'a> Iterator for Iter<'a> {
 
 impl WootImpl {
     fn container_contains(
-        container: &<Self as Crdt>::Container,
-        op_id: <Self as Crdt>::OpId,
+        container: &<Self as ListCrdt>::Container,
+        op_id: <Self as ListCrdt>::OpId,
     ) -> bool {
         if op_id == START_OP_ID || op_id == END_OP_ID {
             return true;
@@ -116,7 +116,7 @@ impl WootImpl {
 }
 
 pub struct WootImpl;
-impl Crdt for WootImpl {
+impl ListCrdt for WootImpl {
     type OpUnit = Op;
 
     type OpId = OpId;
@@ -218,8 +218,8 @@ impl TestFramework for WootImpl {
         }
     }
 
-    fn new_op(rng: &mut impl Rng, container: &mut Self::Container) -> Self::OpUnit {
-        let insert_pos = rng.gen_range(0..container.content.len() + 1);
+    fn new_op(_rng: &mut impl Rng, container: &mut Self::Container, pos: usize) -> Self::OpUnit {
+        let insert_pos = pos % (container.content.len() + 1);
         let (left, right) = if container.content.is_empty() {
             (START_OP_ID, END_OP_ID)
         } else if insert_pos == 0 {

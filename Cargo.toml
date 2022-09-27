@@ -6,9 +6,13 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+arbitrary = { version = "1.1.6", features = ["derive"] }
 arref = "0.1.0"
 rand = "0.8.5"
 
 [dev-dependencies]
 color-backtrace = "0.5.1"
 ctor = "0.1.23"
+
+[features]
+arbitrary = []

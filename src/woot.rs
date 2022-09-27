@@ -1,6 +1,6 @@
-use crate::crdt::{Crdt, OpSet};
+use crate::crdt::{ListCrdt, OpSet};
 
-pub trait Woot: Crdt {
+pub trait Woot: ListCrdt {
     fn left(op: &Self::OpUnit) -> Self::OpId;
     fn right(op: &Self::OpUnit) -> Self::OpId;
     fn get_pos_of(container: &Self::Container, op_id: Self::OpId) -> usize;
