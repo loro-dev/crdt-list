@@ -47,6 +47,8 @@ impl OpSet<Op, OpId> for OpSetImpl {
 #[derive(Debug, Default)]
 pub struct Container {
     content: Vec<Op>,
+    /// exclusive end
+    version_vector: Vec<usize>,
     max_clock: usize,
     id: usize,
 }
@@ -95,6 +97,24 @@ impl<'a> Iterator for Iter<'a> {
     }
 }
 
+impl WootImpl {
+    fn container_contains(
+        container: &<Self as Crdt>::Container,
+        op_id: <Self as Crdt>::OpId,
+    ) -> bool {
+        if op_id == START_OP_ID || op_id == END_OP_ID {
+            return true;
+        }
+        container.content.iter().any(|x| x.id == op_id)
+
+        // if container.version_vector.len() <= op_id.client_id {
+        //     return false;
+        // }
+
+        // container.version_vector[op_id.client_id] > op_id.clock
+    }
+}
+
 pub struct WootImpl;
 impl Crdt for WootImpl {
     type OpUnit = Op;
@@ -138,7 +158,27 @@ impl Crdt for WootImpl {
     }
 
     fn integrate(container: &mut Self::Container, op: Self::OpUnit) {
-        woot::integrate::<WootImpl>(container, op.clone(), op.left, op.right)
+        let id = Self::id(&op);
+        for _ in container.version_vector.len()..id.client_id + 1 {
+            container.version_vector.push(0);
+        }
+        assert!(container.version_vector[id.client_id] == id.clock);
+        woot::integrate::<WootImpl>(container, op.clone(), op.left, op.right);
+
+        container.version_vector[id.client_id] = id.clock + 1;
+    }
+
+    fn can_integrate(container: &Self::Container, op: &Self::OpUnit) -> bool {
+        Self::container_contains(container, op.left)
+            && Self::container_contains(container, op.right)
+            && (op.id.clock == 0
+                || Self::container_contains(
+                    container,
+                    OpId {
+                        client_id: op.id.client_id,
+                        clock: op.id.clock - 1,
+                    },
+                ))
     }
 }
 
@@ -218,17 +258,31 @@ mod woot_impl_test {
 
     #[test]
     fn run() {
-        for i in 0..10 {
+        for i in 0..100 {
             crate::test::test::<WootImpl>(i, 2, 1000);
         }
+    }
+
+    #[test]
+    fn issue() {
+        crate::test::test::<WootImpl>(10, 3, 76);
     }
 
     #[test]
     fn run3() {
         // FIXME: need to impl pending array in test.rs
         // TODO: add can_apply method to crdt
-        for i in 0..100 {
-            crate::test::test::<WootImpl>(i, 3, 10);
+        for seed in 0..100 {
+            for round in 10..100 {
+                println!("{} {}", seed, round);
+                crate::test::test::<WootImpl>(seed, 3, round);
+            }
         }
+    }
+
+    use ctor::ctor;
+    #[ctor]
+    fn init_color_backtrace() {
+        color_backtrace::install();
     }
 }

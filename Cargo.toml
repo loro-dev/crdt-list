@@ -8,3 +8,7 @@ edition = "2021"
 [dependencies]
 arref = "0.1.0"
 rand = "0.8.5"
+
+[dev-dependencies]
+color-backtrace = "0.5.1"
+ctor = "0.1.23"

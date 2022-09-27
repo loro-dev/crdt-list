@@ -4,10 +4,12 @@ use rand::{rngs::StdRng, Rng};
 
 use crate::crdt::Crdt;
 
+#[derive(Debug)]
 struct Actor<T: TestFramework> {
     container: T::Container,
     idx: usize,
     ops: Vec<Vec<T::OpUnit>>,
+    pending_ops: Vec<T::OpUnit>,
     _phantom: PhantomData<T>,
 }
 
@@ -29,6 +31,7 @@ impl<T: TestFramework> Actor<T> {
             container: T::new_container(idx),
             idx,
             ops: vec![Default::default(); n_container],
+            pending_ops: Vec::new(),
             _phantom: PhantomData,
         }
     }
@@ -48,6 +51,29 @@ impl<T: TestFramework> Actor<T> {
         }
     }
 
+    fn apply_pending(&mut self) {
+        let mut pending = std::mem::take(&mut self.pending_ops);
+        let mut pending_length = pending.len();
+        while !pending.is_empty() {
+            let current = std::mem::take(&mut pending);
+            for op in current {
+                if T::can_integrate(&self.container, &op) {
+                    T::integrate(&mut self.container, op.clone());
+                } else {
+                    pending.push(op.clone());
+                }
+            }
+
+            if pending_length == pending.len() {
+                dbg!(&self.container);
+                dbg!(pending);
+                panic!("dead loop");
+            }
+
+            pending_length = pending.len();
+        }
+    }
+
     fn sync(&mut self, other: &Self) {
         for (op_arr_this, op_arr_other) in self.ops.iter_mut().zip(other.ops.iter()) {
             if op_arr_this.len() >= op_arr_other.len() {
@@ -56,9 +82,15 @@ impl<T: TestFramework> Actor<T> {
 
             for op in op_arr_other.iter().skip(op_arr_this.len()) {
                 op_arr_this.push(op.clone());
-                T::integrate(&mut self.container, op.clone());
+                if T::can_integrate(&self.container, op) {
+                    T::integrate(&mut self.container, op.clone());
+                } else {
+                    self.pending_ops.push(op.clone());
+                }
             }
         }
+
+        self.apply_pending();
     }
 
     fn new_op(&mut self, rng: &mut impl Rng) {

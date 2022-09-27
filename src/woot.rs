@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-
 use crate::crdt::{Crdt, OpSet};
 
 pub trait Woot: Crdt {
@@ -10,7 +8,7 @@ pub trait Woot: Crdt {
 
 pub fn integrate<T: Woot>(
     container: &mut T::Container,
-    value: T::OpUnit,
+    to_insert: T::OpUnit,
     left: T::OpId,
     right: T::OpId,
 ) {
@@ -26,23 +24,23 @@ pub fn integrate<T: Woot>(
     }
 
     if empty_between_left_and_right {
-        T::insert_at(container, value, T::get_pos_of(container, right));
+        T::insert_at(container, to_insert, T::get_pos_of(container, right));
         return;
     }
 
     let mut prev = left;
     let mut next = right;
-    for (_, op) in T::iter(container, left, right)
+    for (_, iter_op) in T::iter(container, left, right)
         .filter(|(_, op)| !set.contain(T::left(op)) && !set.contain(T::right(op)))
     {
-        if T::id(op) == prev {
+        if T::id(iter_op) == prev {
             continue;
         }
 
-        if T::cmp(op, &value).is_lt() {
-            prev = T::id(op);
+        if T::cmp(iter_op, &to_insert).is_lt() {
+            prev = T::id(iter_op);
         } else {
-            next = T::id(op);
+            next = T::id(iter_op);
             break;
         }
     }
@@ -52,5 +50,5 @@ pub fn integrate<T: Woot>(
         panic!("Something is off");
     }
 
-    integrate::<T>(container, value, prev, next);
+    integrate::<T>(container, to_insert, prev, next);
 }

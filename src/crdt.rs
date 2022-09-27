@@ -21,4 +21,5 @@ pub trait Crdt {
     fn cmp(op_a: &Self::OpUnit, op_b: &Self::OpUnit) -> Ordering;
     fn contains(op: &Self::OpUnit, id: Self::OpId) -> bool;
     fn integrate(container: &mut Self::Container, op: Self::OpUnit);
+    fn can_integrate(container: &Self::Container, op: &Self::OpUnit) -> bool;
 }
