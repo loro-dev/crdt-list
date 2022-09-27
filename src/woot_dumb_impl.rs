@@ -270,6 +270,13 @@ mod woot_impl_test {
         }
     }
 
+    #[test]
+    fn run_n() {
+        for n in 2..10 {
+            crate::test::test::<WootImpl>(123, n, 10000);
+        }
+    }
+
     use ctor::ctor;
     #[ctor]
     fn init_color_backtrace() {
