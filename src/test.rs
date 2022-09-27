@@ -53,7 +53,6 @@ impl<T: TestFramework> Actor<T> {
 
     fn apply_pending(&mut self) {
         let mut pending = std::mem::take(&mut self.pending_ops);
-        let mut pending_length = pending.len();
         while !pending.is_empty() {
             let current = std::mem::take(&mut pending);
             for op in current {
@@ -63,8 +62,6 @@ impl<T: TestFramework> Actor<T> {
                     pending.push(op.clone());
                 }
             }
-
-            pending_length = pending.len();
         }
     }
 
