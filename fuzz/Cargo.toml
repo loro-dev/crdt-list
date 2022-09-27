@@ -25,3 +25,9 @@ name = "woot"
 path = "fuzz_targets/woot.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "woot-10"
+path = "fuzz_targets/woot-10.rs"
+test = false
+doc = false
