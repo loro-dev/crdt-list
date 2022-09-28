@@ -14,20 +14,13 @@ pub trait Yata: ListCrdt {
 pub fn integrate<T: Yata>(container: &mut T::Container, to_insert: T::OpUnit) {
     let this_left_origin = T::left_origin(&to_insert);
     let this_right_origin = T::right_origin(&to_insert);
-    let mut is_first = true;
     let mut cursor = None;
     let mut visited = T::Set::default();
     let mut conflicting_set = T::Set::default();
     for other in T::iter(container, this_left_origin, this_right_origin) {
-        if is_first && T::contains(&other, this_left_origin) {
+        if T::contains(&other, this_left_origin) {
             // skip left origin
             cursor = Some(other);
-            is_first = false;
-            continue;
-        }
-
-        is_first = false;
-        if T::contains(&other, this_left_origin) {
             continue;
         }
 
