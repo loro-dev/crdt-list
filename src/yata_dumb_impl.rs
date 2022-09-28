@@ -1,11 +1,10 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, ops::Deref};
 
 use crate::{
     crdt::{ListCrdt, OpSet},
     test::TestFramework,
-    woot,
+    yata,
 };
-use rand::Rng;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Op {
@@ -28,6 +27,7 @@ const END_OP_ID: OpId = OpId {
     client_id: usize::MAX,
     clock: 99,
 };
+
 #[derive(Default)]
 pub struct OpSetImpl {
     set: HashSet<OpId>,
@@ -57,7 +57,7 @@ pub struct Container {
 }
 
 pub struct Iter<'a> {
-    arr: &'a Vec<Op>,
+    arr: &'a mut Vec<Op>,
     index: usize,
     start: OpId,
     end: OpId,
@@ -65,8 +65,13 @@ pub struct Iter<'a> {
     started: bool,
 }
 
+pub struct Cursor<'a> {
+    arr: &'a mut Vec<Op>,
+    pos: usize,
+}
+
 impl<'a> Iterator for Iter<'a> {
-    type Item = &'a Op;
+    type Item = Cursor<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.start == START_OP_ID {
@@ -96,11 +101,14 @@ impl<'a> Iterator for Iter<'a> {
             return self.next();
         }
 
-        Some(op)
+        Some(Cursor {
+            arr: unsafe { &mut *(self.arr as *mut _) },
+            pos: self.index - 1,
+        })
     }
 }
 
-impl WootImpl {
+impl YataImpl {
     fn container_contains(
         container: &<Self as ListCrdt>::Container,
         op_id: <Self as ListCrdt>::OpId,
@@ -118,15 +126,23 @@ impl WootImpl {
     }
 }
 
-pub struct WootImpl;
-impl ListCrdt for WootImpl {
+impl Deref for Cursor<'_> {
+    type Target = Op;
+
+    fn deref(&self) -> &Self::Target {
+        &self.arr[self.pos]
+    }
+}
+
+pub struct YataImpl;
+impl ListCrdt for YataImpl {
     type OpUnit = Op;
 
     type OpId = OpId;
 
     type Container = Container;
 
-    type Cursor<'a> = &'a Op;
+    type Cursor<'a> = Cursor<'a>;
 
     type Set = OpSetImpl;
 
@@ -138,7 +154,7 @@ impl ListCrdt for WootImpl {
         to: Self::OpId,
     ) -> Self::Iterator<'_> {
         Iter {
-            arr: &container.content,
+            arr: &mut container.content,
             index: 0,
             start: from,
             end: to,
@@ -172,7 +188,7 @@ impl ListCrdt for WootImpl {
             container.version_vector.push(0);
         }
         assert!(container.version_vector[id.client_id] == id.clock);
-        woot::integrate::<WootImpl>(container, op.clone(), op.left, op.right);
+        yata::integrate::<YataImpl>(container, op);
 
         container.version_vector[id.client_id] = id.clock + 1;
     }
@@ -191,33 +207,34 @@ impl ListCrdt for WootImpl {
     }
 }
 
-impl woot::Woot for WootImpl {
-    fn left(op: &Self::OpUnit) -> Self::OpId {
+impl yata::Yata for YataImpl {
+    fn left_origin(op: &Self::OpUnit) -> Self::OpId {
         op.left
     }
 
-    fn right(op: &Self::OpUnit) -> Self::OpId {
+    fn right_origin(op: &Self::OpUnit) -> Self::OpId {
         op.right
     }
 
-    fn get_pos_of(container: &Container, op_id: Self::OpId) -> usize {
-        if op_id == START_OP_ID {
-            0
-        } else if op_id == END_OP_ID {
-            container.content.len()
+    fn insert_after(anchor: &mut Self::Cursor<'_>, op: Self::OpUnit) {
+        if anchor.pos + 1 >= anchor.arr.len() {
+            anchor.arr.push(op);
         } else {
-            container
-                .content
-                .iter()
-                .position(|x| x.id == op_id)
-                .unwrap()
+            anchor.arr.insert(anchor.pos + 1, op);
         }
     }
 }
 
-impl TestFramework for WootImpl {
+impl TestFramework for YataImpl {
     fn is_content_eq(a: &Self::Container, b: &Self::Container) -> bool {
-        a.content.eq(&b.content)
+        match a.content.eq(&b.content) {
+            true => true,
+            false => {
+                dbg!(&a.content);
+                dbg!(&b.content);
+                false
+            }
+        }
     }
 
     fn new_container(id: usize) -> Self::Container {
@@ -227,7 +244,11 @@ impl TestFramework for WootImpl {
         }
     }
 
-    fn new_op(_rng: &mut impl Rng, container: &mut Self::Container, pos: usize) -> Self::OpUnit {
+    fn new_op(
+        _rng: &mut impl rand::Rng,
+        container: &mut Self::Container,
+        pos: usize,
+    ) -> Self::OpUnit {
         let insert_pos = pos % (container.content.len() + 1);
         let (left, right) = if container.content.is_empty() {
             (START_OP_ID, END_OP_ID)
@@ -257,27 +278,27 @@ impl TestFramework for WootImpl {
 }
 
 #[cfg(test)]
-mod woot_impl_test {
+mod yata_impl_test {
     use super::*;
 
     #[test]
     fn run() {
-        for i in 0..100 {
-            crate::test::test::<WootImpl>(i, 2, 1000);
+        for seed in 0..100 {
+            crate::test::test::<YataImpl>(seed, 2, 1000);
         }
     }
 
     #[test]
     fn run3() {
         for seed in 0..100 {
-            crate::test::test::<WootImpl>(seed, 3, 1000);
+            crate::test::test::<YataImpl>(seed, 3, 1000);
         }
     }
 
     #[test]
     fn run_n() {
         for n in 2..10 {
-            crate::test::test::<WootImpl>(123, n, 10000);
+            crate::test::test::<YataImpl>(123, n, 10000);
         }
     }
 

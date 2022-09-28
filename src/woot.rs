@@ -14,7 +14,7 @@ pub fn integrate<T: Woot>(
 ) {
     let mut set = T::Set::default();
     let mut empty_between_left_and_right = true;
-    for (_, op) in T::iter(container, left, right) {
+    for ref op in T::iter(container, left, right) {
         if T::contains(op, left) || T::contains(op, right) {
             continue;
         }
@@ -30,15 +30,15 @@ pub fn integrate<T: Woot>(
 
     let mut prev = left;
     let mut next = right;
-    for (_, iter_op) in T::iter(container, left, right)
-        .filter(|(_, op)| !set.contain(T::left(op)) && !set.contain(T::right(op)))
+    for ref iter_op in T::iter(container, left, right)
+        .filter(|op| !set.contain(T::left(op)) && !set.contain(T::right(op)))
     {
         if T::id(iter_op) == left || T::id(iter_op) == right {
             // left cannot be next, and right cannot be prev
             continue;
         }
 
-        if T::cmp(iter_op, &to_insert).is_lt() {
+        if T::cmp_id(iter_op, &to_insert).is_lt() {
             prev = T::id(iter_op);
         } else {
             next = T::id(iter_op);
