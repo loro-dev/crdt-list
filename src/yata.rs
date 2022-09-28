@@ -6,8 +6,8 @@
 use crate::crdt::{ListCrdt, OpSet};
 
 pub trait Yata: ListCrdt {
-    fn left_origin(op: &Self::OpUnit) -> Self::OpId;
-    fn right_origin(op: &Self::OpUnit) -> Self::OpId;
+    fn left_origin(op: &Self::OpUnit) -> Option<Self::OpId>;
+    fn right_origin(op: &Self::OpUnit) -> Option<Self::OpId>;
     fn insert_after(anchor: &mut Self::Cursor<'_>, op: Self::OpUnit);
 }
 
@@ -18,13 +18,13 @@ pub fn integrate<T: Yata>(container: &mut T::Container, to_insert: T::OpUnit) {
     let mut visited = T::Set::default();
     let mut conflicting_set = T::Set::default();
     for other in T::iter(container, this_left_origin, this_right_origin) {
-        if T::contains(&other, this_left_origin) {
+        if this_left_origin.is_some() && T::contains(&other, this_left_origin.unwrap()) {
             // skip left origin
             cursor = Some(other);
             continue;
         }
 
-        if T::contains(&other, this_right_origin) {
+        if this_right_origin.is_some() && T::contains(&other, this_right_origin.unwrap()) {
             break;
         }
 
@@ -45,8 +45,8 @@ pub fn integrate<T: Yata>(container: &mut T::Container, to_insert: T::OpUnit) {
                 }
                 std::cmp::Ordering::Equal => unreachable!(),
             }
-        } else if visited.contain(other_left_origin) {
-            if !conflicting_set.contain(other_left_origin) {
+        } else if other_left_origin.is_some() && visited.contain(other_left_origin.unwrap()) {
+            if !conflicting_set.contain(other_left_origin.unwrap()) {
                 cursor = Some(other);
                 conflicting_set.clear();
             }

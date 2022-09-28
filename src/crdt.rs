@@ -20,8 +20,8 @@ pub trait ListCrdt {
     /// inclusive end
     fn iter(
         container: &mut Self::Container,
-        from: Self::OpId,
-        to: Self::OpId,
+        from: Option<Self::OpId>,
+        to: Option<Self::OpId>,
     ) -> Self::Iterator<'_>;
     fn insert_at(container: &mut Self::Container, op: Self::OpUnit, pos: usize);
     fn id(op: &Self::OpUnit) -> Self::OpId;
@@ -29,4 +29,5 @@ pub trait ListCrdt {
     fn contains(op: &Self::OpUnit, id: Self::OpId) -> bool;
     fn integrate(container: &mut Self::Container, op: Self::OpUnit);
     fn can_integrate(container: &Self::Container, op: &Self::OpUnit) -> bool;
+    fn len(container: &Self::Container) -> usize;
 }

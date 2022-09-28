@@ -1,121 +1,19 @@
-use std::{collections::HashSet, ops::Deref};
-
 use crate::{
-    crdt::{ListCrdt, OpSet},
+    crdt::ListCrdt,
+    dumb_common::{Container, Cursor, Iter, Op, OpId, OpSetImpl},
     test::TestFramework,
     yata,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Op {
-    id: OpId,
-    left: OpId,
-    right: OpId,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct OpId {
-    client_id: usize,
-    clock: usize,
-}
-
-const START_OP_ID: OpId = OpId {
-    client_id: usize::MAX,
-    clock: 0,
-};
-const END_OP_ID: OpId = OpId {
-    client_id: usize::MAX,
-    clock: 99,
-};
-
-#[derive(Default)]
-pub struct OpSetImpl {
-    set: HashSet<OpId>,
-}
-
-impl OpSet<Op, OpId> for OpSetImpl {
-    fn insert(&mut self, value: &Op) {
-        self.set.insert(value.id);
-    }
-
-    fn contain(&self, id: OpId) -> bool {
-        self.set.contains(&id)
-    }
-
-    fn clear(&mut self) {
-        self.set.clear();
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct Container {
-    content: Vec<Op>,
-    /// exclusive end
-    version_vector: Vec<usize>,
-    max_clock: usize,
-    id: usize,
-}
-
-pub struct Iter<'a> {
-    arr: &'a mut Vec<Op>,
-    index: usize,
-    start: OpId,
-    end: OpId,
-    done: bool,
-    started: bool,
-}
-
-pub struct Cursor<'a> {
-    arr: &'a mut Vec<Op>,
-    pos: usize,
-}
-
-impl<'a> Iterator for Iter<'a> {
-    type Item = Cursor<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.start == START_OP_ID {
-            self.started = true;
-        }
-
-        if self.done {
-            return None;
-        }
-
-        if self.index >= self.arr.len() {
-            return None;
-        }
-
-        let op = &self.arr[self.index];
-        self.index += 1;
-
-        if op.id == self.end {
-            self.done = true;
-        }
-
-        if op.id == self.start {
-            self.started = true;
-        }
-
-        if !self.started {
-            return self.next();
-        }
-
-        Some(Cursor {
-            arr: unsafe { &mut *(self.arr as *mut _) },
-            pos: self.index - 1,
-        })
-    }
-}
-
 impl YataImpl {
     fn container_contains(
         container: &<Self as ListCrdt>::Container,
-        op_id: <Self as ListCrdt>::OpId,
+        op_id: Option<<Self as ListCrdt>::OpId>,
     ) -> bool {
-        if op_id == START_OP_ID || op_id == END_OP_ID {
+        if op_id.is_none() {
             return true;
         }
+        let op_id = op_id.unwrap();
         container.content.iter().any(|x| x.id == op_id)
 
         // if container.version_vector.len() <= op_id.client_id {
@@ -123,14 +21,6 @@ impl YataImpl {
         // }
 
         // container.version_vector[op_id.client_id] > op_id.clock
-    }
-}
-
-impl Deref for Cursor<'_> {
-    type Target = Op;
-
-    fn deref(&self) -> &Self::Target {
-        &self.arr[self.pos]
     }
 }
 
@@ -150,8 +40,8 @@ impl ListCrdt for YataImpl {
 
     fn iter(
         container: &mut Self::Container,
-        from: Self::OpId,
-        to: Self::OpId,
+        from: Option<Self::OpId>,
+        to: Option<Self::OpId>,
     ) -> Self::Iterator<'_> {
         Iter {
             arr: &mut container.content,
@@ -199,20 +89,24 @@ impl ListCrdt for YataImpl {
             && (op.id.clock == 0
                 || Self::container_contains(
                     container,
-                    OpId {
+                    Some(OpId {
                         client_id: op.id.client_id,
                         clock: op.id.clock - 1,
-                    },
+                    }),
                 ))
+    }
+
+    fn len(container: &Self::Container) -> usize {
+        container.content.len()
     }
 }
 
 impl yata::Yata for YataImpl {
-    fn left_origin(op: &Self::OpUnit) -> Self::OpId {
+    fn left_origin(op: &Self::OpUnit) -> Option<Self::OpId> {
         op.left
     }
 
-    fn right_origin(op: &Self::OpUnit) -> Self::OpId {
+    fn right_origin(op: &Self::OpUnit) -> Option<Self::OpId> {
         op.right
     }
 
@@ -251,15 +145,15 @@ impl TestFramework for YataImpl {
     ) -> Self::OpUnit {
         let insert_pos = pos % (container.content.len() + 1);
         let (left, right) = if container.content.is_empty() {
-            (START_OP_ID, END_OP_ID)
+            (None, None)
         } else if insert_pos == 0 {
-            (START_OP_ID, container.content[0].id)
+            (None, Some(container.content[0].id))
         } else if insert_pos == container.content.len() {
-            (container.content[insert_pos - 1].id, END_OP_ID)
+            (Some(container.content[insert_pos - 1].id), None)
         } else {
             (
-                container.content[insert_pos - 1].id,
-                container.content[insert_pos].id,
+                Some(container.content[insert_pos - 1].id),
+                Some(container.content[insert_pos].id),
             )
         };
 
@@ -289,16 +183,16 @@ mod yata_impl_test {
     }
 
     #[test]
-    fn run3() {
+    fn run_3() {
         for seed in 0..100 {
             crate::test::test::<YataImpl>(seed, 3, 1000);
         }
     }
 
     #[test]
-    fn run_n() {
-        for n in 2..10 {
-            crate::test::test::<YataImpl>(123, n, 10000);
+    fn run_10() {
+        for seed in 0..100 {
+            crate::test::test::<YataImpl>(seed, 10, 1000);
         }
     }
 

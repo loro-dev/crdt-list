@@ -1,113 +1,21 @@
-use std::collections::HashSet;
-
 use crate::{
-    crdt::{ListCrdt, OpSet},
+    crdt::ListCrdt,
+    dumb_common::{Container, Cursor, Iter, Op, OpId, OpSetImpl},
     test::TestFramework,
     woot,
 };
 use rand::Rng;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Op {
-    id: OpId,
-    left: OpId,
-    right: OpId,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct OpId {
-    client_id: usize,
-    clock: usize,
-}
-
-const START_OP_ID: OpId = OpId {
-    client_id: usize::MAX,
-    clock: 0,
-};
-const END_OP_ID: OpId = OpId {
-    client_id: usize::MAX,
-    clock: 99,
-};
-#[derive(Default)]
-pub struct OpSetImpl {
-    set: HashSet<OpId>,
-}
-
-impl OpSet<Op, OpId> for OpSetImpl {
-    fn insert(&mut self, value: &Op) {
-        self.set.insert(value.id);
-    }
-
-    fn contain(&self, id: OpId) -> bool {
-        self.set.contains(&id)
-    }
-
-    fn clear(&mut self) {
-        self.set.clear();
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct Container {
-    content: Vec<Op>,
-    /// exclusive end
-    version_vector: Vec<usize>,
-    max_clock: usize,
-    id: usize,
-}
-
-pub struct Iter<'a> {
-    arr: &'a Vec<Op>,
-    index: usize,
-    start: OpId,
-    end: OpId,
-    done: bool,
-    started: bool,
-}
-
-impl<'a> Iterator for Iter<'a> {
-    type Item = &'a Op;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.start == START_OP_ID {
-            self.started = true;
-        }
-
-        if self.done {
-            return None;
-        }
-
-        if self.index >= self.arr.len() {
-            return None;
-        }
-
-        let op = &self.arr[self.index];
-        self.index += 1;
-
-        if op.id == self.end {
-            self.done = true;
-        }
-
-        if op.id == self.start {
-            self.started = true;
-        }
-
-        if !self.started {
-            return self.next();
-        }
-
-        Some(op)
-    }
-}
-
 impl WootImpl {
     fn container_contains(
         container: &<Self as ListCrdt>::Container,
-        op_id: <Self as ListCrdt>::OpId,
+        op_id: Option<<Self as ListCrdt>::OpId>,
     ) -> bool {
-        if op_id == START_OP_ID || op_id == END_OP_ID {
+        if op_id.is_none() {
             return true;
         }
+
+        let op_id = op_id.unwrap();
         container.content.iter().any(|x| x.id == op_id)
 
         // if container.version_vector.len() <= op_id.client_id {
@@ -126,7 +34,7 @@ impl ListCrdt for WootImpl {
 
     type Container = Container;
 
-    type Cursor<'a> = &'a Op;
+    type Cursor<'a> = Cursor<'a>;
 
     type Set = OpSetImpl;
 
@@ -134,11 +42,11 @@ impl ListCrdt for WootImpl {
 
     fn iter(
         container: &mut Self::Container,
-        from: Self::OpId,
-        to: Self::OpId,
+        from: Option<Self::OpId>,
+        to: Option<Self::OpId>,
     ) -> Self::Iterator<'_> {
         Iter {
-            arr: &container.content,
+            arr: &mut container.content,
             index: 0,
             start: from,
             end: to,
@@ -183,35 +91,33 @@ impl ListCrdt for WootImpl {
             && (op.id.clock == 0
                 || Self::container_contains(
                     container,
-                    OpId {
+                    Some(OpId {
                         client_id: op.id.client_id,
                         clock: op.id.clock - 1,
-                    },
+                    }),
                 ))
+    }
+
+    fn len(container: &Self::Container) -> usize {
+        container.content.len()
     }
 }
 
 impl woot::Woot for WootImpl {
-    fn left(op: &Self::OpUnit) -> Self::OpId {
+    fn left(op: &Self::OpUnit) -> Option<Self::OpId> {
         op.left
     }
 
-    fn right(op: &Self::OpUnit) -> Self::OpId {
+    fn right(op: &Self::OpUnit) -> Option<Self::OpId> {
         op.right
     }
 
     fn get_pos_of(container: &Container, op_id: Self::OpId) -> usize {
-        if op_id == START_OP_ID {
-            0
-        } else if op_id == END_OP_ID {
-            container.content.len()
-        } else {
-            container
-                .content
-                .iter()
-                .position(|x| x.id == op_id)
-                .unwrap()
-        }
+        container
+            .content
+            .iter()
+            .position(|x| x.id == op_id)
+            .unwrap()
     }
 }
 
@@ -230,15 +136,15 @@ impl TestFramework for WootImpl {
     fn new_op(_rng: &mut impl Rng, container: &mut Self::Container, pos: usize) -> Self::OpUnit {
         let insert_pos = pos % (container.content.len() + 1);
         let (left, right) = if container.content.is_empty() {
-            (START_OP_ID, END_OP_ID)
+            (None, None)
         } else if insert_pos == 0 {
-            (START_OP_ID, container.content[0].id)
+            (None, Some(container.content[0].id))
         } else if insert_pos == container.content.len() {
-            (container.content[insert_pos - 1].id, END_OP_ID)
+            (Some(container.content[insert_pos - 1].id), None)
         } else {
             (
-                container.content[insert_pos - 1].id,
-                container.content[insert_pos].id,
+                Some(container.content[insert_pos - 1].id),
+                Some(container.content[insert_pos].id),
             )
         };
 
