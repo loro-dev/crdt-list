@@ -1,5 +1,5 @@
 [package]
-name = "crdt-woot"
+name = "crdt-list"
 version = "0.1.0"
 edition = "2021"
 authors = ["zxch3n <remch183@outlook.com>"]
