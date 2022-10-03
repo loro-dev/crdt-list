@@ -1,4 +1,3 @@
-use arbitrary::Arbitrary;
 use std::marker::PhantomData;
 
 use rand::{rngs::StdRng, Rng};

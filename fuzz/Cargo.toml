@@ -1,5 +1,5 @@
 [package]
-name = "crdt-woot-fuzz"
+name = "crdt-list-fuzz"
 version = "0.0.0"
 authors = ["Automatically generated"]
 publish = false
@@ -12,9 +12,9 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 rand = "0.8.5"
 
-[dependencies.crdt-woot]
+[dependencies.crdt-list]
 path = ".."
-features = ["arbitrary"]
+features = ["fuzzing"]
 
 # Prevent this from interfering with workspaces
 [workspace]
