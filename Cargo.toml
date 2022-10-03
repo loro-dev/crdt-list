@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 authors = ["zxch3n <remch183@outlook.com>"]
 keywords = ["crdt", "distributed"]
+description = "Abstract CRDTs for lists"
+license = "MIT OR Apache-2.0"
 include = ["Cargo.toml", "**/*.rs"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
