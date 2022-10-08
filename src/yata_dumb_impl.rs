@@ -78,7 +78,7 @@ impl ListCrdt for YataImpl {
             container.version_vector.push(0);
         }
         assert!(container.version_vector[id.client_id] == id.clock);
-        yata::integrate::<YataImpl>(container, op);
+        unsafe { yata::integrate::<YataImpl>(container, op) };
 
         container.version_vector[id.client_id] = id.clock + 1;
     }
@@ -110,7 +110,7 @@ impl yata::Yata for YataImpl {
         op.right
     }
 
-    fn insert_after(anchor: &mut Self::Cursor<'_>, op: Self::OpUnit) {
+    fn insert_after(_: &mut Self::Container, anchor: Self::Cursor<'_>, op: Self::OpUnit) {
         if anchor.pos + 1 >= anchor.arr.len() {
             anchor.arr.push(op);
         } else {
