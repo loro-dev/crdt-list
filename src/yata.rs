@@ -69,5 +69,10 @@ pub unsafe fn integrate<T: Yata>(container: &mut T::Container, to_insert: T::OpU
     }
 
     drop(cursor);
-    T::insert_at(container, to_insert, 0);
+
+    if this_left_origin.is_none() {
+        T::insert_at(container, to_insert, 0);
+    } else {
+        panic!("Cannot find the insert position");
+    }
 }
