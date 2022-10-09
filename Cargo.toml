@@ -1,6 +1,6 @@
 [package]
 name = "crdt-list"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 authors = ["zxch3n <remch183@outlook.com>"]
 keywords = ["crdt", "distributed"]
