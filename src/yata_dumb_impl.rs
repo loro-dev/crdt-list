@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{
     crdt::ListCrdt,
     dumb_common::{Container, Cursor, Iter, Op, OpId, OpSetImpl},
@@ -134,6 +136,7 @@ impl TestFramework for YataImpl {
     fn new_container(id: usize) -> Self::Container {
         Container {
             id,
+            version_vector: vec![0; 10],
             ..Default::default()
         }
     }
@@ -164,10 +167,40 @@ impl TestFramework for YataImpl {
             },
             left,
             right,
+            deleted: false,
         };
 
         container.max_clock += 1;
         ans
+    }
+
+    type DeleteOp = HashSet<Self::OpId>;
+
+    fn new_del_op(container: &Self::Container, pos: usize, len: usize) -> Self::DeleteOp {
+        let mut deleted = HashSet::new();
+        for op in container.content.iter_real().skip(pos).take(len) {
+            deleted.insert(op.id);
+        }
+
+        deleted
+    }
+
+    fn integrate_delete_op(container: &mut Self::Container, delete_set: Self::DeleteOp) {
+        for op in container.content.iter_real_mut() {
+            if delete_set.contains(&op.id) {
+                op.deleted = true;
+            }
+        }
+    }
+
+    fn can_apply_del_op(container: &Self::Container, deleted: &Self::DeleteOp) -> bool {
+        for target in deleted.iter() {
+            if container.version_vector[target.client_id] <= target.clock {
+                return false;
+            }
+        }
+
+        true
     }
 }
 

@@ -1,4 +1,7 @@
-use std::{collections::HashSet, ops::Deref};
+use std::{
+    collections::HashSet,
+    ops::{Deref, DerefMut},
+};
 
 use crate::crdt::OpSet;
 
@@ -7,6 +10,7 @@ pub struct Op {
     pub id: OpId,
     pub left: Option<OpId>,
     pub right: Option<OpId>,
+    pub deleted: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -34,9 +38,53 @@ impl OpSet<Op, OpId> for OpSetImpl {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Content(Vec<Op>);
+
+impl Deref for Content {
+    type Target = Vec<Op>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Content {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Content {
+    pub fn real_len(&self) -> usize {
+        self.0.iter().filter(|x| !x.deleted).count()
+    }
+
+    pub fn real_index(&self, index: usize) -> usize {
+        let mut real_index = 0;
+        for i in 0..self.0.len() {
+            if !self.0[i].deleted {
+                if real_index == index {
+                    return i;
+                }
+                real_index += 1;
+            }
+        }
+        panic!("index out of range");
+    }
+
+    pub fn iter_real(&self) -> impl Iterator<Item = &Op> {
+        self.0.iter().filter(|x| !x.deleted)
+    }
+
+    pub fn iter_real_mut(&mut self) -> impl Iterator<Item = &mut Op> {
+        self.0.iter_mut().filter(|x| !x.deleted)
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Container {
-    pub content: Vec<Op>,
+    pub content: Content,
     /// exclusive end
     pub version_vector: Vec<usize>,
     pub max_clock: usize,
@@ -61,31 +109,35 @@ impl<'a> Iterator for Iter<'a> {
     type Item = Cursor<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.start.is_none() {
-            self.started = true;
-        }
+        loop {
+            if self.start.is_none() {
+                self.started = true;
+            }
 
-        if self.done {
-            return None;
-        }
+            if self.done {
+                return None;
+            }
 
-        if self.index >= self.arr.len() {
-            return None;
-        }
+            if self.index >= self.arr.len() {
+                return None;
+            }
 
-        let op = &self.arr[self.index];
-        self.index += 1;
+            let op = &self.arr[self.index];
+            self.index += 1;
 
-        if Some(op.id) == self.end {
-            self.done = true;
-        }
+            if Some(op.id) == self.end {
+                self.done = true;
+            }
 
-        if Some(op.id) == self.start {
-            self.started = true;
-        }
+            if Some(op.id) == self.start {
+                self.started = true;
+            }
 
-        if !self.started {
-            return self.next();
+            if !self.started {
+                continue;
+            }
+
+            break;
         }
 
         Some(Cursor {

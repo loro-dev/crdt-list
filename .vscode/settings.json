@@ -1,3 +1,4 @@
 {
-  "cSpell.words": ["woot"]
+  "cSpell.words": ["woot"],
+  "rust-analyzer.cargo.features": ["fuzzing"]
 }
