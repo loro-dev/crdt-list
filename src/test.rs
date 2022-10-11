@@ -13,7 +13,6 @@ pub trait TestFramework: ListCrdt {
 
     fn new_del_op(container: &Self::Container, pos: usize, len: usize) -> Self::DeleteOp;
     fn integrate_delete_op(container: &mut Self::Container, op: Self::DeleteOp);
-    fn can_apply_del_op(container: &Self::Container, op: &Self::DeleteOp) -> bool;
 }
 
 #[derive(Clone, Debug)]
@@ -41,7 +40,6 @@ struct Actor<T: TestFramework> {
     ops: Vec<Vec<T::OpUnit>>,
     del_ops: Vec<Vec<T::DeleteOp>>,
     pending_ops: Vec<T::OpUnit>,
-    pending_del_ops: Vec<T::DeleteOp>,
     _phantom: PhantomData<T>,
 }
 
@@ -53,7 +51,6 @@ impl<T: TestFramework> Actor<T> {
             ops: vec![Default::default(); n_container],
             pending_ops: Vec::new(),
             del_ops: vec![Default::default(); n_container],
-            pending_del_ops: Vec::new(),
             _phantom: PhantomData,
         }
     }
@@ -86,19 +83,6 @@ impl<T: TestFramework> Actor<T> {
                 }
             }
         }
-
-        // repeat the same logic with delete op
-        let mut pending = std::mem::take(&mut self.pending_del_ops);
-        while !pending.is_empty() {
-            let current = std::mem::take(&mut pending);
-            for op in current {
-                if T::can_apply_del_op(&self.container, &op) {
-                    T::integrate_delete_op(&mut self.container, op.clone());
-                } else {
-                    pending.push(op.clone());
-                }
-            }
-        }
     }
 
     fn sync(&mut self, other: &Self) {
@@ -117,6 +101,7 @@ impl<T: TestFramework> Actor<T> {
             }
         }
 
+        self.apply_pending();
         // repeat the same logic with delete op
         for (op_arr_this, op_arr_other) in self.del_ops.iter_mut().zip(other.del_ops.iter()) {
             if op_arr_this.len() >= op_arr_other.len() {
@@ -125,15 +110,9 @@ impl<T: TestFramework> Actor<T> {
 
             for op in op_arr_other.iter().skip(op_arr_this.len()) {
                 op_arr_this.push(op.clone());
-                if T::can_apply_del_op(&self.container, op) {
-                    T::integrate_delete_op(&mut self.container, op.clone());
-                } else {
-                    self.pending_del_ops.push(op.clone());
-                }
+                T::integrate_delete_op(&mut self.container, op.clone());
             }
         }
-
-        self.apply_pending();
     }
 
     fn new_op(&mut self, rng: &mut impl Rng, pos: usize) {

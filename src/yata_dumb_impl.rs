@@ -192,16 +192,6 @@ impl TestFramework for YataImpl {
             }
         }
     }
-
-    fn can_apply_del_op(container: &Self::Container, deleted: &Self::DeleteOp) -> bool {
-        for target in deleted.iter() {
-            if container.version_vector[target.client_id] <= target.clock {
-                return false;
-            }
-        }
-
-        true
-    }
 }
 
 #[cfg(test)]

@@ -190,18 +190,6 @@ impl TestFramework for WootImpl {
             }
         }
     }
-
-    fn can_apply_del_op(container: &Self::Container, deleted: &Self::DeleteOp) -> bool {
-        for target in deleted.iter() {
-            if container.version_vector.len() <= target.client_id
-                || container.version_vector[target.client_id] <= target.clock
-            {
-                return false;
-            }
-        }
-
-        true
-    }
 }
 
 #[cfg(test)]
@@ -229,7 +217,7 @@ mod woot_impl_test {
         }
     }
 
-    use crate::{test::Action::*, woot::Woot};
+    use crate::test::Action::*;
     #[test]
     fn issue_del() {
         crate::test::test_with_actions::<WootImpl>(
