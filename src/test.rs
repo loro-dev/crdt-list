@@ -18,23 +18,15 @@ pub trait TestFramework: ListCrdt {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Action {
-    Sync {
-        from: usize,
-        to: usize,
-    },
-    NewOp {
-        client_id: usize,
-        pos: usize,
-    },
-    Delete {
-        client_id: usize,
-        pos: usize,
-        len: usize,
-    },
+    Sync { from: u8, to: u8 },
+    NewOp { client_id: u8, pos: u8 },
+    Delete { client_id: u8, pos: u8, len: u8 },
 }
 
 impl Action {
     pub fn normalize(&mut self, client_len: usize, content_len: usize) {
+        let client_len = std::cmp::min(client_len, 255) as u8;
+        let content_len = std::cmp::min(client_len, 255) as u8;
         match self {
             Action::Sync { from, to } => {
                 *from %= client_len;
@@ -68,13 +60,13 @@ struct Actor<T: TestFramework> {
 }
 
 impl<T: TestFramework> Actor<T> {
-    fn new(idx: usize, n_container: usize) -> Self {
+    fn new(idx: u8, n_container: u8) -> Self {
         Actor {
-            container: T::new_container(idx),
-            idx,
-            ops: vec![Default::default(); n_container],
+            container: T::new_container(idx as usize),
+            idx: idx as usize,
+            ops: vec![Default::default(); n_container as usize],
             pending_ops: Vec::new(),
-            del_ops: vec![Default::default(); n_container],
+            del_ops: vec![Default::default(); n_container as usize],
             _phantom: PhantomData,
         }
     }
@@ -83,13 +75,14 @@ impl<T: TestFramework> Actor<T> {
         let action = rng.gen_range(0..2);
         match action {
             0 => {
-                let from = rng.gen_range(0..num_containers);
-                let to = (rng.gen_range(1..num_containers) + from) % num_containers;
+                let from = rng.gen_range(0..num_containers) as u8;
+                let to =
+                    ((rng.gen_range(1..num_containers) + from as usize) % num_containers) as u8;
                 Action::Sync { from, to }
             }
             1 => Action::NewOp {
-                client_id: rng.gen_range(0..num_containers),
-                pos: rng.gen_range(0..usize::MAX),
+                client_id: rng.gen_range(0..num_containers) as u8,
+                pos: rng.gen_range(0..usize::MAX) as u8,
             },
             _ => unreachable!(),
         }
@@ -156,15 +149,17 @@ impl<T: TestFramework> Actor<T> {
             let action = Self::gen(rng, actors.len());
             match action {
                 Action::Sync { from, to } => {
-                    let (to_, from_) = arref::array_mut_ref!(actors, [to, from]);
+                    let (to_, from_) = arref::array_mut_ref!(actors, [to as usize, from as usize]);
                     to_.sync(from_);
                 }
-                Action::NewOp { client_id: at, pos } => actors[at].new_op(rng, pos),
+                Action::NewOp { client_id: at, pos } => {
+                    actors[at as usize].new_op(rng, pos as usize)
+                }
                 Action::Delete {
                     client_id,
                     pos,
                     len,
-                } => actors[client_id].new_del_op(pos, len),
+                } => actors[client_id as usize].new_del_op(pos as usize, len as usize),
             }
         }
     }
@@ -188,7 +183,7 @@ pub fn test<T: TestFramework>(seed: u64, n_container: usize, round: usize) {
     let mut rng: StdRng = rand::SeedableRng::seed_from_u64(seed);
     let mut containers: Vec<Actor<T>> = Vec::new();
     for i in 0..n_container {
-        containers.push(Actor::new(i, n_container));
+        containers.push(Actor::new(i as u8, n_container as u8));
     }
 
     Actor::run(&mut containers, &mut rng, round);
@@ -201,6 +196,8 @@ pub fn test_with_actions<T: TestFramework>(
     mut actions: Vec<Action>,
 ) {
     normalize_actions(&mut actions, n_container, content_len);
+    let n_container = n_container as u8;
+    let content_len = content_len.min(255) as u8;
     let mut rng: StdRng = rand::SeedableRng::seed_from_u64(123);
     let mut actors: Vec<Actor<T>> = Vec::new();
     for i in 0..n_container {
@@ -216,15 +213,17 @@ pub fn test_with_actions<T: TestFramework>(
                     from = (from + 1) % n_container;
                 }
 
-                let (to_, from_) = arref::array_mut_ref!(&mut actors, [to, from]);
+                let (to_, from_) = arref::array_mut_ref!(&mut actors, [to as usize, from as usize]);
                 to_.sync(from_);
             }
-            Action::NewOp { client_id: at, pos } => actors[*at].new_op(&mut rng, *pos),
+            Action::NewOp { client_id: at, pos } => {
+                actors[*at as usize].new_op(&mut rng, *pos as usize)
+            }
             Action::Delete {
                 client_id,
                 pos,
                 len,
-            } => actors[*client_id].new_del_op(*pos, *len),
+            } => actors[*client_id as usize].new_del_op(*pos as usize, *len as usize),
         }
     }
 
