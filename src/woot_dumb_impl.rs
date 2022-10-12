@@ -222,6 +222,7 @@ mod woot_impl_test {
     fn issue_del() {
         crate::test::test_with_actions::<WootImpl>(
             5,
+            100,
             vec![
                 Delete {
                     client_id: 15336116641672254676,

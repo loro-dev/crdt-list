@@ -195,8 +195,12 @@ pub fn test<T: TestFramework>(seed: u64, n_container: usize, round: usize) {
     Actor::check(&mut containers);
 }
 
-pub fn test_with_actions<T: TestFramework>(n_container: usize, mut actions: Vec<Action>) {
-    normalize_actions(&mut actions, n_container);
+pub fn test_with_actions<T: TestFramework>(
+    n_container: usize,
+    content_len: usize,
+    mut actions: Vec<Action>,
+) {
+    normalize_actions(&mut actions, n_container, content_len);
     let mut rng: StdRng = rand::SeedableRng::seed_from_u64(123);
     let mut actors: Vec<Actor<T>> = Vec::new();
     for i in 0..n_container {
@@ -227,8 +231,8 @@ pub fn test_with_actions<T: TestFramework>(n_container: usize, mut actions: Vec<
     Actor::check(&mut actors);
 }
 
-pub fn normalize_actions(actions: &mut [Action], n_container: usize) {
+pub fn normalize_actions(actions: &mut [Action], n_container: usize, content_len: usize) {
     for action in actions {
-        action.normalize(n_container, 100);
+        action.normalize(n_container, content_len);
     }
 }
