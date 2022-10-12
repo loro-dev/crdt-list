@@ -10,7 +10,21 @@ use crate::crdt::{ListCrdt, OpSet};
 pub trait Yata: ListCrdt {
     fn left_origin(op: &Self::OpUnit) -> Option<Self::OpId>;
     fn right_origin(op: &Self::OpUnit) -> Option<Self::OpId>;
+    /// insert after the anchor
     fn insert_after(container: &mut Self::Container, anchor: Self::Cursor<'_>, op: Self::OpUnit);
+
+    /// insert right after the anchor.
+    ///
+    /// [Yata::insert_after] and [Yata::insert_immediately_after] are the same if the cursor length is 1.
+    ///
+    /// When cursor has length greater than 1
+    /// - [Yata::insert_immediately_after] should insert at the position of cursor.start + 1
+    /// - [Yata::insert_after] should insert at the position of cursor.start + cursor.len
+    fn insert_immediately_after(
+        container: &mut Self::Container,
+        anchor: Self::Cursor<'_>,
+        op: Self::OpUnit,
+    );
 }
 
 /// # Safety
@@ -20,6 +34,7 @@ pub trait Yata: ListCrdt {
 pub unsafe fn integrate<T: Yata>(container: &mut T::Container, to_insert: T::OpUnit) {
     let this_left_origin = T::left_origin(&to_insert);
     let this_right_origin = T::right_origin(&to_insert);
+    let mut first_cursor = None;
     let mut cursor = None;
     let mut visited = T::Set::default();
     let mut conflicting_set = T::Set::default();
@@ -27,7 +42,7 @@ pub unsafe fn integrate<T: Yata>(container: &mut T::Container, to_insert: T::OpU
     for other in T::iter(container, this_left_origin, this_right_origin) {
         if this_left_origin.is_some() && T::contains(&other, this_left_origin.unwrap()) {
             // skip left origin
-            cursor = Some(other);
+            first_cursor = Some(other);
             continue;
         }
 
@@ -67,8 +82,14 @@ pub unsafe fn integrate<T: Yata>(container: &mut T::Container, to_insert: T::OpU
         T::insert_after(container, cursor, to_insert);
         return;
     }
+    if let Some(cursor) = first_cursor {
+        let container = container_ptr.as_mut();
+        T::insert_immediately_after(container, cursor, to_insert);
+        return;
+    }
 
     drop(cursor);
+    drop(first_cursor);
 
     if this_left_origin.is_none() {
         T::insert_at(container, to_insert, 0);

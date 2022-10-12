@@ -119,6 +119,14 @@ impl yata::Yata for YataImpl {
             anchor.arr.insert(anchor.pos + 1, op);
         }
     }
+
+    fn insert_immediately_after(
+        container: &mut Self::Container,
+        anchor: Self::Cursor<'_>,
+        op: Self::OpUnit,
+    ) {
+        Self::insert_after(container, anchor, op)
+    }
 }
 
 impl TestFramework for YataImpl {
