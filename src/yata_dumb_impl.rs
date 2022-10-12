@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    crdt::ListCrdt,
+    crdt::{GetOp, ListCrdt},
     dumb_common::{Container, Cursor, Iter, Op, OpId, OpSetImpl},
     test::TestFramework,
     yata,
@@ -52,6 +52,7 @@ impl ListCrdt for YataImpl {
             end: to,
             done: false,
             started: false,
+            exclude_end: true,
         }
     }
 
@@ -120,12 +121,13 @@ impl yata::Yata for YataImpl {
         }
     }
 
-    fn insert_immediately_after(
-        container: &mut Self::Container,
-        anchor: Self::Cursor<'_>,
-        op: Self::OpUnit,
-    ) {
-        Self::insert_after(container, anchor, op)
+    fn insert_after_id(container: &mut Self::Container, id: Option<Self::OpId>, op: Self::OpUnit) {
+        if let Some(id) = id {
+            let pos = container.content.iter().position(|x| x.id == id).unwrap();
+            container.content.insert(pos + 1, op);
+        } else {
+            Self::insert_at(container, op, 0)
+        }
     }
 }
 

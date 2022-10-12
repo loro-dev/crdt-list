@@ -54,6 +54,7 @@ impl ListCrdt for WootImpl {
             end: to,
             done: false,
             started: false,
+            exclude_end: false,
         }
     }
 

@@ -98,6 +98,7 @@ pub struct Iter<'a> {
     pub end: Option<OpId>,
     pub done: bool,
     pub started: bool,
+    pub exclude_end: bool,
 }
 
 pub struct Cursor<'a> {
@@ -127,10 +128,16 @@ impl<'a> Iterator for Iter<'a> {
 
             if Some(op.id) == self.end {
                 self.done = true;
+                if self.exclude_end {
+                    return None;
+                }
             }
 
             if Some(op.id) == self.start {
                 self.started = true;
+                if self.exclude_end {
+                    continue;
+                }
             }
 
             if !self.started {
