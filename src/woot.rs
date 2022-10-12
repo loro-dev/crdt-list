@@ -1,4 +1,4 @@
-use crate::crdt::{ListCrdt, OpSet};
+use crate::crdt::{GetOp, ListCrdt, OpSet};
 
 pub trait Woot: ListCrdt {
     fn left(op: &Self::OpUnit) -> Option<Self::OpId>;
@@ -15,6 +15,7 @@ pub fn integrate<T: Woot>(
     let mut set = T::Set::default();
     let mut empty_between_left_and_right = true;
     for ref op in T::iter(container, left, right) {
+        let op = &op.get_op();
         if (left.is_some() && T::contains(op, left.unwrap()))
             || (right.is_some() && T::contains(op, right.unwrap()))
         {
@@ -36,11 +37,13 @@ pub fn integrate<T: Woot>(
     let mut prev = left;
     let mut next = right;
     for ref iter_op in T::iter(container, left, right).filter(|op| {
+        let op = &op.get_op();
         let left = T::left(op);
         let right = T::right(op);
         (left.is_none() || !set.contain(left.unwrap()))
             && (right.is_none() || !set.contain(right.unwrap()))
     }) {
+        let iter_op = &iter_op.get_op();
         if Some(T::id(iter_op)) == left || Some(T::id(iter_op)) == right {
             // left cannot be next, and right cannot be prev
             continue;

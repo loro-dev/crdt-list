@@ -1,3 +1,7 @@
+//! NOTE: current implementation assume that the [crdt::ListCrdt::OpUnit] is cheap to clone
+//!
+//!
+//!
 pub mod crdt;
 mod dumb_common;
 pub mod woot;

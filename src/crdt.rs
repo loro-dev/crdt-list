@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fmt::Debug, ops::Deref};
+use std::{cmp::Ordering, fmt::Debug};
 
 pub trait OpSet<Op, OpId>: Default {
     fn insert(&mut self, value: &Op);
@@ -6,12 +6,17 @@ pub trait OpSet<Op, OpId>: Default {
     fn clear(&mut self);
 }
 
+pub trait GetOp {
+    type Target;
+    fn get_op(&self) -> Self::Target;
+}
+
 pub trait ListCrdt {
     type OpUnit: Clone + Debug;
     type OpId: Eq + Copy + Debug;
     type Container: Debug;
     type Set: OpSet<Self::OpUnit, Self::OpId>;
-    type Cursor<'a>: Deref<Target = Self::OpUnit>;
+    type Cursor<'a>: GetOp<Target = Self::OpUnit>;
     type Iterator<'a>: Iterator<Item = Self::Cursor<'a>>
     where
         <Self as ListCrdt>::OpUnit: 'a,

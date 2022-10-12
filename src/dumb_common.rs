@@ -3,7 +3,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::crdt::OpSet;
+use crate::crdt::{GetOp, OpSet};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Op {
@@ -147,10 +147,10 @@ impl<'a> Iterator for Iter<'a> {
     }
 }
 
-impl Deref for Cursor<'_> {
+impl<'a> GetOp for Cursor<'a> {
     type Target = Op;
 
-    fn deref(&self) -> &Self::Target {
-        &self.arr[self.pos]
+    fn get_op(&self) -> Self::Target {
+        self.arr[self.pos].clone()
     }
 }

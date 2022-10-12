@@ -5,7 +5,7 @@
 
 use std::ptr::NonNull;
 
-use crate::crdt::{ListCrdt, OpSet};
+use crate::crdt::{GetOp, ListCrdt, OpSet};
 
 pub trait Yata: ListCrdt {
     fn left_origin(op: &Self::OpUnit) -> Option<Self::OpId>;
@@ -39,10 +39,11 @@ pub unsafe fn integrate<T: Yata>(container: &mut T::Container, to_insert: T::OpU
     let mut visited = T::Set::default();
     let mut conflicting_set = T::Set::default();
     let mut container_ptr: NonNull<_> = container.into();
-    for other in T::iter(container, this_left_origin, this_right_origin) {
+    for other_cursor in T::iter(container, this_left_origin, this_right_origin) {
+        let other = other_cursor.get_op();
         if this_left_origin.is_some() && T::contains(&other, this_left_origin.unwrap()) {
             // skip left origin
-            first_cursor = Some(other);
+            first_cursor = Some(other_cursor);
             continue;
         }
 
@@ -62,13 +63,13 @@ pub unsafe fn integrate<T: Yata>(container: &mut T::Container, to_insert: T::OpU
                     }
                 }
                 std::cmp::Ordering::Greater => {
-                    cursor = Some(other);
+                    cursor = Some(other_cursor);
                     conflicting_set.clear();
                 }
             }
         } else if other_left_origin.is_some() && visited.contain(other_left_origin.unwrap()) {
             if !conflicting_set.contain(other_left_origin.unwrap()) {
-                cursor = Some(other);
+                cursor = Some(other_cursor);
                 conflicting_set.clear();
             }
         } else {
