@@ -54,9 +54,9 @@ pub unsafe fn integrate<T: Yata>(container: &mut T::Container, to_insert: T::OpU
         conflicting_set.insert(&other);
         let other_left_origin = T::left_origin(&other);
         if other_left_origin == this_left_origin {
-            let other_right_origin = T::right_origin(&other);
             match T::cmp_id(&to_insert, &other) {
-                std::cmp::Ordering::Less => {
+                std::cmp::Ordering::Less | std::cmp::Ordering::Equal => {
+                    let other_right_origin = T::right_origin(&other);
                     if other_right_origin == this_right_origin {
                         break;
                     }
@@ -65,7 +65,6 @@ pub unsafe fn integrate<T: Yata>(container: &mut T::Container, to_insert: T::OpU
                     cursor = Some(other);
                     conflicting_set.clear();
                 }
-                std::cmp::Ordering::Equal => unreachable!(),
             }
         } else if other_left_origin.is_some() && visited.contain(other_left_origin.unwrap()) {
             if !conflicting_set.contain(other_left_origin.unwrap()) {

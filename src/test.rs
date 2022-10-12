@@ -33,6 +33,30 @@ pub enum Action {
     },
 }
 
+impl Action {
+    pub fn normalize(&mut self, client_len: usize, content_len: usize) {
+        match self {
+            Action::Sync { from, to } => {
+                *from %= client_len;
+                *to %= client_len;
+            }
+            Action::NewOp { client_id, pos } => {
+                *client_id %= client_len;
+                *pos %= content_len;
+            }
+            Action::Delete {
+                client_id,
+                pos,
+                len,
+            } => {
+                *client_id %= client_len;
+                *pos %= content_len;
+                *len %= content_len;
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Actor<T: TestFramework> {
     container: T::Container,
@@ -171,7 +195,8 @@ pub fn test<T: TestFramework>(seed: u64, n_container: usize, round: usize) {
     Actor::check(&mut containers);
 }
 
-pub fn test_with_actions<T: TestFramework>(n_container: usize, actions: &[Action]) {
+pub fn test_with_actions<T: TestFramework>(n_container: usize, mut actions: Vec<Action>) {
+    normalize_actions(&mut actions, n_container);
     let mut rng: StdRng = rand::SeedableRng::seed_from_u64(123);
     let mut actors: Vec<Actor<T>> = Vec::new();
     for i in 0..n_container {
@@ -179,10 +204,10 @@ pub fn test_with_actions<T: TestFramework>(n_container: usize, actions: &[Action
     }
 
     for action in actions {
-        match action {
+        match &action {
             Action::Sync { from, to } => {
-                let to = *to % n_container;
-                let mut from = *from % n_container;
+                let mut from = *from;
+                let to = *to;
                 if from == to {
                     from = (from + 1) % n_container;
                 }
@@ -190,16 +215,20 @@ pub fn test_with_actions<T: TestFramework>(n_container: usize, actions: &[Action
                 let (to_, from_) = arref::array_mut_ref!(&mut actors, [to, from]);
                 to_.sync(from_);
             }
-            Action::NewOp { client_id: at, pos } => {
-                actors[*at % n_container].new_op(&mut rng, *pos)
-            }
+            Action::NewOp { client_id: at, pos } => actors[*at].new_op(&mut rng, *pos),
             Action::Delete {
                 client_id,
                 pos,
                 len,
-            } => actors[*client_id % n_container].new_del_op(*pos, *len % 5),
+            } => actors[*client_id].new_del_op(*pos, *len),
         }
     }
 
     Actor::check(&mut actors);
+}
+
+pub fn normalize_actions(actions: &mut [Action], n_container: usize) {
+    for action in actions {
+        action.normalize(n_container, 100);
+    }
 }
