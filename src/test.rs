@@ -26,7 +26,7 @@ pub enum Action {
 impl Action {
     pub fn normalize(&mut self, client_len: usize, content_len: usize) {
         let client_len = std::cmp::min(client_len, 255) as u8;
-        let content_len = std::cmp::min(client_len, 255) as u8;
+        let content_len = std::cmp::min(content_len, 255) as u8;
         match self {
             Action::Sync { from, to } => {
                 *from %= client_len;
@@ -197,7 +197,6 @@ pub fn test_with_actions<T: TestFramework>(
 ) {
     normalize_actions(&mut actions, n_container, content_len);
     let n_container = n_container as u8;
-    let content_len = content_len.min(255) as u8;
     let mut rng: StdRng = rand::SeedableRng::seed_from_u64(123);
     let mut actors: Vec<Actor<T>> = Vec::new();
     for i in 0..n_container {

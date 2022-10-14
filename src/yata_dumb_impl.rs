@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    crdt::{GetOp, ListCrdt},
+    crdt::ListCrdt,
     dumb_common::{Container, Cursor, Iter, Op, OpId, OpSetImpl},
     test::TestFramework,
     yata,
