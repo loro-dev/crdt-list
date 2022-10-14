@@ -13,6 +13,8 @@ pub trait TestFramework: ListCrdt {
 
     fn new_del_op(container: &Self::Container, pos: usize, len: usize) -> Self::DeleteOp;
     fn integrate_delete_op(container: &mut Self::Container, op: Self::DeleteOp);
+    fn integrate(container: &mut Self::Container, op: Self::OpUnit);
+    fn can_integrate(container: &Self::Container, op: &Self::OpUnit) -> bool;
 }
 
 #[derive(Clone, Debug)]

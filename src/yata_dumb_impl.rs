@@ -56,10 +56,6 @@ impl ListCrdt for YataImpl {
         }
     }
 
-    fn insert_at(container: &mut Self::Container, op: Self::OpUnit, pos: usize) {
-        container.content.insert(pos, op);
-    }
-
     fn id(op: &Self::OpUnit) -> Self::OpId {
         op.id
     }
@@ -73,34 +69,6 @@ impl ListCrdt for YataImpl {
 
     fn contains(op: &Self::OpUnit, id: Self::OpId) -> bool {
         op.id == id
-    }
-
-    fn integrate(container: &mut Self::Container, op: Self::OpUnit) {
-        let id = Self::id(&op);
-        for _ in container.version_vector.len()..id.client_id + 1 {
-            container.version_vector.push(0);
-        }
-        assert!(container.version_vector[id.client_id] == id.clock);
-        unsafe { yata::integrate::<YataImpl>(container, op) };
-
-        container.version_vector[id.client_id] = id.clock + 1;
-    }
-
-    fn can_integrate(container: &Self::Container, op: &Self::OpUnit) -> bool {
-        Self::container_contains(container, op.left)
-            && Self::container_contains(container, op.right)
-            && (op.id.clock == 0
-                || Self::container_contains(
-                    container,
-                    Some(OpId {
-                        client_id: op.id.client_id,
-                        clock: op.id.clock - 1,
-                    }),
-                ))
-    }
-
-    fn len(container: &Self::Container) -> usize {
-        container.content.len()
     }
 }
 
@@ -126,7 +94,7 @@ impl yata::Yata for YataImpl {
             let pos = container.content.iter().position(|x| x.id == id).unwrap();
             container.content.insert(pos + 1, op);
         } else {
-            Self::insert_at(container, op, 0)
+            container.content.insert(0, op);
         }
     }
 }
@@ -201,6 +169,30 @@ impl TestFramework for YataImpl {
                 op.deleted = true;
             }
         }
+    }
+
+    fn integrate(container: &mut Self::Container, op: Self::OpUnit) {
+        let id = Self::id(&op);
+        for _ in container.version_vector.len()..id.client_id + 1 {
+            container.version_vector.push(0);
+        }
+        assert!(container.version_vector[id.client_id] == id.clock);
+        unsafe { yata::integrate::<YataImpl>(container, op) };
+
+        container.version_vector[id.client_id] = id.clock + 1;
+    }
+
+    fn can_integrate(container: &Self::Container, op: &Self::OpUnit) -> bool {
+        Self::container_contains(container, op.left)
+            && Self::container_contains(container, op.right)
+            && (op.id.clock == 0
+                || Self::container_contains(
+                    container,
+                    Some(OpId {
+                        client_id: op.id.client_id,
+                        clock: op.id.clock - 1,
+                    }),
+                ))
     }
 }
 

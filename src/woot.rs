@@ -4,6 +4,8 @@ pub trait Woot: ListCrdt {
     fn left(op: &Self::OpUnit) -> Option<Self::OpId>;
     fn right(op: &Self::OpUnit) -> Option<Self::OpId>;
     fn get_pos_of(container: &Self::Container, op_id: Self::OpId) -> usize;
+    fn len(container: &Self::Container) -> usize;
+    fn insert_at(container: &mut Self::Container, op: Self::OpUnit, pos: usize);
 }
 
 pub fn integrate<T: Woot>(

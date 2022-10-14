@@ -58,10 +58,6 @@ impl ListCrdt for WootImpl {
         }
     }
 
-    fn insert_at(container: &mut Self::Container, op: Self::OpUnit, pos: usize) {
-        container.content.insert(pos, op);
-    }
-
     fn id(op: &Self::OpUnit) -> Self::OpId {
         op.id
     }
@@ -76,37 +72,13 @@ impl ListCrdt for WootImpl {
     fn contains(op: &Self::OpUnit, id: Self::OpId) -> bool {
         op.id == id
     }
-
-    fn integrate(container: &mut Self::Container, op: Self::OpUnit) {
-        let id = Self::id(&op);
-        for _ in container.version_vector.len()..id.client_id + 1 {
-            container.version_vector.push(0);
-        }
-        assert!(container.version_vector[id.client_id] == id.clock);
-        woot::integrate::<WootImpl>(container, op.clone(), op.left, op.right);
-
-        container.version_vector[id.client_id] = id.clock + 1;
-    }
-
-    fn can_integrate(container: &Self::Container, op: &Self::OpUnit) -> bool {
-        Self::container_contains(container, op.left)
-            && Self::container_contains(container, op.right)
-            && (op.id.clock == 0
-                || Self::container_contains(
-                    container,
-                    Some(OpId {
-                        client_id: op.id.client_id,
-                        clock: op.id.clock - 1,
-                    }),
-                ))
-    }
-
-    fn len(container: &Self::Container) -> usize {
-        container.content.len()
-    }
 }
 
 impl woot::Woot for WootImpl {
+    fn len(container: &Self::Container) -> usize {
+        container.content.len()
+    }
+
     fn left(op: &Self::OpUnit) -> Option<Self::OpId> {
         op.left
     }
@@ -121,6 +93,10 @@ impl woot::Woot for WootImpl {
             .iter()
             .position(|x| x.id == op_id)
             .unwrap()
+    }
+
+    fn insert_at(container: &mut Self::Container, op: Self::OpUnit, pos: usize) {
+        container.content.insert(pos, op);
     }
 }
 
@@ -190,6 +166,30 @@ impl TestFramework for WootImpl {
                 op.deleted = true;
             }
         }
+    }
+
+    fn integrate(container: &mut Self::Container, op: Self::OpUnit) {
+        let id = Self::id(&op);
+        for _ in container.version_vector.len()..id.client_id + 1 {
+            container.version_vector.push(0);
+        }
+        assert!(container.version_vector[id.client_id] == id.clock);
+        woot::integrate::<WootImpl>(container, op.clone(), op.left, op.right);
+
+        container.version_vector[id.client_id] = id.clock + 1;
+    }
+
+    fn can_integrate(container: &Self::Container, op: &Self::OpUnit) -> bool {
+        Self::container_contains(container, op.left)
+            && Self::container_contains(container, op.right)
+            && (op.id.clock == 0
+                || Self::container_contains(
+                    container,
+                    Some(OpId {
+                        client_id: op.id.client_id,
+                        clock: op.id.clock - 1,
+                    }),
+                ))
     }
 }
 
