@@ -73,6 +73,7 @@ impl ListCrdt for YataImpl {
 }
 
 impl yata::Yata for YataImpl {
+    type Context = ();
     fn left_origin(op: &Self::OpUnit) -> Option<Self::OpId> {
         op.left
     }
@@ -81,7 +82,7 @@ impl yata::Yata for YataImpl {
         op.right
     }
 
-    fn insert_after(_: &mut Self::Container, anchor: Self::Cursor<'_>, op: Self::OpUnit) {
+    fn insert_after(anchor: Self::Cursor<'_>, op: Self::OpUnit, _: &mut ()) {
         if anchor.pos + 1 >= anchor.arr.len() {
             anchor.arr.push(op);
         } else {
@@ -89,7 +90,12 @@ impl yata::Yata for YataImpl {
         }
     }
 
-    fn insert_after_id(container: &mut Self::Container, id: Option<Self::OpId>, op: Self::OpUnit) {
+    fn insert_after_id(
+        container: &mut Self::Container,
+        id: Option<Self::OpId>,
+        op: Self::OpUnit,
+        _: &mut (),
+    ) {
         if let Some(id) = id {
             let pos = container.content.iter().position(|x| x.id == id).unwrap();
             container.content.insert(pos + 1, op);
@@ -177,7 +183,7 @@ impl TestFramework for YataImpl {
             container.version_vector.push(0);
         }
         assert!(container.version_vector[id.client_id] == id.clock);
-        unsafe { yata::integrate::<YataImpl>(container, op) };
+        yata::integrate::<YataImpl>(container, op, &mut ());
 
         container.version_vector[id.client_id] = id.clock + 1;
     }

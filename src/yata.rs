@@ -3,30 +3,33 @@
 //!
 //!
 
-use std::ptr::NonNull;
-
 use crate::crdt::{GetOp, ListCrdt, OpSet};
 
 /// For Yata iter should only iterate over the element between `start` and `to`, exclude both `start` and `to`
 pub trait Yata: ListCrdt {
+    type Context;
     fn left_origin(op: &Self::OpUnit) -> Option<Self::OpId>;
     fn right_origin(op: &Self::OpUnit) -> Option<Self::OpId>;
     /// insert after the anchor
-    fn insert_after(container: &mut Self::Container, anchor: Self::Cursor<'_>, op: Self::OpUnit);
-    fn insert_after_id(container: &mut Self::Container, id: Option<Self::OpId>, op: Self::OpUnit);
+    fn insert_after(anchor: Self::Cursor<'_>, op: Self::OpUnit, context: &mut Self::Context);
+    fn insert_after_id(
+        container: &mut Self::Container,
+        id: Option<Self::OpId>,
+        op: Self::OpUnit,
+        context: &mut Self::Context,
+    );
 }
 
-/// # Safety
-///
-/// Users should be sure that inside [`Yata::insert_after`] there are not more than one
-/// exclusive references to the same element
-pub unsafe fn integrate<T: Yata>(container: &mut T::Container, to_insert: T::OpUnit) {
+pub fn integrate<T: Yata>(
+    container: &mut T::Container,
+    to_insert: T::OpUnit,
+    ctx: &mut T::Context,
+) {
     let this_left_origin = T::left_origin(&to_insert);
     let this_right_origin = T::right_origin(&to_insert);
     let mut cursor = None;
     let mut visited = T::Set::default();
     let mut conflicting_set = T::Set::default();
-    let mut container_ptr: NonNull<_> = container.into();
     for other_cursor in T::iter(container, this_left_origin, this_right_origin) {
         let other = other_cursor.get_op();
         if (this_left_origin.is_some() && T::contains(&other, this_left_origin.unwrap()))
@@ -61,10 +64,11 @@ pub unsafe fn integrate<T: Yata>(container: &mut T::Container, to_insert: T::OpU
         }
     }
 
-    let container = container_ptr.as_mut();
     if let Some(cursor) = cursor {
-        T::insert_after(container, cursor, to_insert);
-    } else {
-        T::insert_after_id(container, this_left_origin, to_insert);
+        T::insert_after(cursor, to_insert, ctx);
+        return;
     }
+
+    drop(cursor);
+    T::insert_after_id(container, this_left_origin, to_insert, ctx);
 }
