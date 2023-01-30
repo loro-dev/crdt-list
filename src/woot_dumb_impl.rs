@@ -1,11 +1,7 @@
 use std::collections::HashSet;
 
-use crate::{
-    crdt::ListCrdt,
-    dumb_common::{Container, Cursor, Iter, Op, OpId, OpSetImpl},
-    test::TestFramework,
-    woot,
-};
+pub use crate::dumb_common::{Container, Cursor, Iter, Op, OpId, OpSetImpl};
+use crate::{crdt::ListCrdt, test::TestFramework, woot};
 use rand::Rng;
 
 impl WootImpl {
