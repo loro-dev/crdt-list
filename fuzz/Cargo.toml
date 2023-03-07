@@ -27,6 +27,12 @@ test = false
 doc = false
 
 [[bin]]
+name = "rga"
+path = "fuzz_targets/rga.rs"
+test = false
+doc = false
+
+[[bin]]
 name = "yata"
 path = "fuzz_targets/yata.rs"
 test = false

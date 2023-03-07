@@ -8,6 +8,7 @@ use crate::crdt::{GetOp, OpSet};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Op {
     pub id: OpId,
+    pub lamport: u32,
     pub left: Option<OpId>,
     pub right: Option<OpId>,
     pub deleted: bool,

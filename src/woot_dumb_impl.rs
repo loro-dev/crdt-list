@@ -132,6 +132,7 @@ impl TestFramework for WootImpl {
             left,
             right,
             deleted: false,
+            lamport: 0,
         };
 
         container.max_clock += 1;

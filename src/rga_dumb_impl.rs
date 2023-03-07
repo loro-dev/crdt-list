@@ -1,9 +1,14 @@
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    ops::{Deref, DerefMut},
+};
 
 pub use crate::dumb_common::{Container, Cursor, Iter, Op, OpId, OpSetImpl};
-use crate::{crdt::ListCrdt, test::TestFramework, yata};
+use crate::{crdt::ListCrdt, rga, test::TestFramework};
+use rand::Rng;
 
-impl YataImpl {
+pub struct RgaImpl;
+impl RgaImpl {
     fn container_contains(
         container: &<Self as ListCrdt>::Container,
         op_id: Option<<Self as ListCrdt>::OpId>,
@@ -11,6 +16,7 @@ impl YataImpl {
         if op_id.is_none() {
             return true;
         }
+
         let op_id = op_id.unwrap();
         container.content.iter().any(|x| x.id == op_id)
 
@@ -22,13 +28,32 @@ impl YataImpl {
     }
 }
 
-pub struct YataImpl;
-impl ListCrdt for YataImpl {
+#[derive(Debug)]
+pub struct RgaContainer {
+    container: Container,
+    next_lamport: u32,
+}
+
+impl Deref for RgaContainer {
+    type Target = Container;
+
+    fn deref(&self) -> &Self::Target {
+        &self.container
+    }
+}
+
+impl DerefMut for RgaContainer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.container
+    }
+}
+
+impl ListCrdt for RgaImpl {
     type OpUnit = Op;
 
     type OpId = OpId;
 
-    type Container = Container;
+    type Container = RgaContainer;
 
     type Cursor<'a> = Cursor<'a>;
 
@@ -48,7 +73,7 @@ impl ListCrdt for YataImpl {
             end: to,
             done: false,
             started: false,
-            exclude_end: true,
+            exclude_end: false,
         }
     }
 
@@ -68,64 +93,57 @@ impl ListCrdt for YataImpl {
     }
 }
 
-impl yata::Yata for YataImpl {
-    type Context = ();
-    fn left_origin(op: &Self::OpUnit) -> Option<Self::OpId> {
+impl rga::Rga for RgaImpl {
+    fn len(container: &Self::Container) -> usize {
+        container.content.len()
+    }
+
+    fn left(op: &Self::OpUnit) -> Option<Self::OpId> {
         op.left
     }
 
-    fn right_origin(op: &Self::OpUnit) -> Option<Self::OpId> {
-        op.right
+    type Lamport = u32;
+
+    fn lamport(op: &Self::OpUnit) -> Self::Lamport {
+        op.lamport
     }
 
-    fn insert_after(anchor: Self::Cursor<'_>, op: Self::OpUnit, _: &mut ()) {
-        if anchor.pos + 1 >= anchor.arr.len() {
-            anchor.arr.push(op);
-        } else {
-            anchor.arr.insert(anchor.pos + 1, op);
-        }
-    }
-
-    fn insert_after_id(
-        container: &mut Self::Container,
-        id: Option<Self::OpId>,
-        op: Self::OpUnit,
-        _: &mut (),
-    ) {
-        if let Some(id) = id {
-            let pos = container.content.iter().position(|x| x.id == id).unwrap();
-            container.content.insert(pos + 1, op);
-        } else {
-            container.content.insert(0, op);
-        }
-    }
-}
-
-impl TestFramework for YataImpl {
-    fn is_content_eq(a: &Self::Container, b: &Self::Container) -> bool {
-        match a.content.eq(&b.content) {
-            true => true,
-            false => {
-                dbg!(&a.content);
-                dbg!(&b.content);
-                false
+    fn insert_after(container: &mut Self::Container, left: Option<Self::OpId>, op: Self::OpUnit) {
+        match left {
+            Some(left) => {
+                let pos = container.content.iter().position(|x| x.id == left).unwrap();
+                container.content.insert(pos + 1, op);
+            }
+            None => {
+                container.content.insert(0, op);
             }
         }
     }
 
+    type ClientId = usize;
+
+    fn client_id(id: Self::OpId) -> Self::ClientId {
+        id.client_id
+    }
+}
+
+impl TestFramework for RgaImpl {
+    fn is_content_eq(a: &Self::Container, b: &Self::Container) -> bool {
+        a.content.eq(&b.content)
+    }
+
     fn new_container(id: usize) -> Self::Container {
-        Container {
-            id,
-            version_vector: vec![0; 10],
-            ..Default::default()
+        RgaContainer {
+            container: Container {
+                id,
+                version_vector: vec![0; 10],
+                ..Default::default()
+            },
+            next_lamport: 0,
         }
     }
 
-    fn new_op(
-        _rng: &mut impl rand::Rng,
-        container: &mut Self::Container,
-        pos: usize,
-    ) -> Self::OpUnit {
+    fn new_op(_rng: &mut impl Rng, container: &mut Self::Container, pos: usize) -> Self::OpUnit {
         let insert_pos = pos % (container.content.len() + 1);
         let (left, right) = if container.content.is_empty() {
             (None, None)
@@ -148,17 +166,25 @@ impl TestFramework for YataImpl {
             left,
             right,
             deleted: false,
-            lamport: 0,
+            lamport: container.next_lamport,
         };
 
         container.max_clock += 1;
+        container.next_lamport += 1;
         ans
     }
 
     type DeleteOp = HashSet<Self::OpId>;
 
-    fn new_del_op(container: &Self::Container, pos: usize, len: usize) -> Self::DeleteOp {
+    fn new_del_op(container: &Self::Container, mut pos: usize, mut len: usize) -> Self::DeleteOp {
+        let content_len = container.content.real_len();
         let mut deleted = HashSet::new();
+        if content_len == 0 {
+            return deleted;
+        }
+
+        pos %= content_len;
+        len = std::cmp::min(len, content_len - pos);
         for op in container.content.iter_real().skip(pos).take(len) {
             deleted.insert(op.id);
         }
@@ -175,12 +201,13 @@ impl TestFramework for YataImpl {
     }
 
     fn integrate(container: &mut Self::Container, op: Self::OpUnit) {
+        container.next_lamport = std::cmp::max(container.next_lamport, op.lamport + 1);
         let id = Self::id(&op);
         for _ in container.version_vector.len()..id.client_id + 1 {
             container.version_vector.push(0);
         }
         assert!(container.version_vector[id.client_id] == id.clock);
-        yata::integrate::<YataImpl>(container, op, &mut ());
+        rga::integrate::<RgaImpl>(container, op);
 
         container.version_vector[id.client_id] = id.clock + 1;
     }
@@ -200,27 +227,27 @@ impl TestFramework for YataImpl {
 }
 
 #[cfg(test)]
-mod yata_impl_test {
+mod rga_impl_test {
     use super::*;
 
     #[test]
     fn run() {
-        for seed in 0..100 {
-            crate::test::test::<YataImpl>(seed, 2, 1000);
+        for i in 0..100 {
+            crate::test::test::<RgaImpl>(i, 2, 1000);
         }
     }
 
     #[test]
-    fn run_3() {
+    fn run3() {
         for seed in 0..100 {
-            crate::test::test::<YataImpl>(seed, 3, 1000);
+            crate::test::test::<RgaImpl>(seed, 3, 1000);
         }
     }
 
     #[test]
-    fn run_10() {
-        for seed in 0..100 {
-            crate::test::test::<YataImpl>(seed, 10, 1000);
+    fn run_n() {
+        for n in 2..10 {
+            crate::test::test::<RgaImpl>(123, n, 10000);
         }
     }
 
