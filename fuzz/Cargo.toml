@@ -38,6 +38,12 @@ path = "fuzz_targets/yata.rs"
 test = false
 doc = false
 
+[[bin]]
+name = "fugue"
+path = "fuzz_targets/fugue.rs"
+test = false
+doc = false
+
 
 [[bin]]
 name = "woot-10"

@@ -1,9 +1,9 @@
-use std::collections::HashSet;
+use std::{cmp::Ordering, collections::HashSet};
 
 pub use crate::dumb_common::{Container, Cursor, Iter, Op, OpId, OpSetImpl};
-use crate::{crdt::ListCrdt, test::TestFramework, woot};
+use crate::{crdt::ListCrdt, fugue, test::TestFramework};
 
-impl WootImpl {
+impl FugueImpl {
     fn container_contains(
         container: &<Self as ListCrdt>::Container,
         op_id: Option<<Self as ListCrdt>::OpId>,
@@ -11,7 +11,6 @@ impl WootImpl {
         if op_id.is_none() {
             return true;
         }
-
         let op_id = op_id.unwrap();
         container.content.iter().any(|x| x.id == op_id)
 
@@ -23,8 +22,8 @@ impl WootImpl {
     }
 }
 
-pub struct WootImpl;
-impl ListCrdt for WootImpl {
+pub struct FugueImpl;
+impl ListCrdt for FugueImpl {
     type OpUnit = Op;
 
     type OpId = OpId;
@@ -49,7 +48,7 @@ impl ListCrdt for WootImpl {
             end: to,
             done: false,
             started: false,
-            exclude_end: false,
+            exclude_end: true,
         }
     }
 
@@ -69,35 +68,83 @@ impl ListCrdt for WootImpl {
     }
 }
 
-impl woot::Woot for WootImpl {
-    fn len(container: &Self::Container) -> usize {
-        container.content.len()
-    }
-
-    fn left(op: &Self::OpUnit) -> Option<Self::OpId> {
+impl fugue::Fugue for FugueImpl {
+    type Context = ();
+    fn left_origin(op: &Self::OpUnit) -> Option<Self::OpId> {
         op.left
     }
 
-    fn right(op: &Self::OpUnit) -> Option<Self::OpId> {
+    fn right_origin(op: &Self::OpUnit) -> Option<Self::OpId> {
         op.right
     }
 
-    fn get_pos_of(container: &Container, op_id: Self::OpId) -> usize {
-        container
-            .content
-            .iter()
-            .position(|x| x.id == op_id)
-            .unwrap()
+    fn insert_after(anchor: Self::Cursor<'_>, op: Self::OpUnit, _: &mut ()) {
+        if anchor.pos + 1 >= anchor.arr.len() {
+            anchor.arr.push(op);
+        } else {
+            anchor.arr.insert(anchor.pos + 1, op);
+        }
     }
 
-    fn insert_at(container: &mut Self::Container, op: Self::OpUnit, pos: usize) {
-        container.content.insert(pos, op);
+    fn insert_after_id(
+        container: &mut Self::Container,
+        id: Option<Self::OpId>,
+        op: Self::OpUnit,
+        _: &mut (),
+    ) {
+        if let Some(id) = id {
+            let pos = container.content.iter().position(|x| x.id == id).unwrap();
+            container.content.insert(pos + 1, op);
+        } else {
+            container.content.insert(0, op);
+        }
+    }
+
+    fn left_origin_of_id(container: &Self::Container, op_id: &Self::OpId) -> Option<Self::OpId> {
+        for op in container.content.iter() {
+            if op.id == *op_id {
+                return op.left;
+            }
+        }
+
+        panic!("Cannot find left origin")
+    }
+
+    fn cmp_pos(
+        container: &Self::Container,
+        op_a: Option<Self::OpId>,
+        op_b: Option<Self::OpId>,
+    ) -> std::cmp::Ordering {
+        match (op_a, op_b) {
+            (None, None) => Ordering::Equal,
+            (None, Some(_)) => Ordering::Greater,
+            (Some(_), None) => Ordering::Less,
+            (Some(a), Some(b)) => {
+                if a == b {
+                    return Ordering::Equal;
+                }
+
+                for op in container.content.iter() {
+                    if op.id == a {
+                        return Ordering::Less;
+                    }
+                    if op.id == b {
+                        return Ordering::Greater;
+                    }
+                }
+
+                panic!("not found")
+            }
+        }
     }
 }
 
-impl TestFramework for WootImpl {
+impl TestFramework for FugueImpl {
     fn is_content_eq(a: &Self::Container, b: &Self::Container) -> bool {
-        a.content.eq(&b.content)
+        match a.content.eq(&b.content) {
+            true => true,
+            false => false,
+        }
     }
 
     fn new_container(id: usize) -> Self::Container {
@@ -140,15 +187,8 @@ impl TestFramework for WootImpl {
 
     type DeleteOp = HashSet<Self::OpId>;
 
-    fn new_del_op(container: &Self::Container, mut pos: usize, mut len: usize) -> Self::DeleteOp {
-        let content_len = container.content.real_len();
+    fn new_del_op(container: &Self::Container, pos: usize, len: usize) -> Self::DeleteOp {
         let mut deleted = HashSet::new();
-        if content_len == 0 {
-            return deleted;
-        }
-
-        pos %= content_len;
-        len = std::cmp::min(len, content_len - pos);
         for op in container.content.iter_real().skip(pos).take(len) {
             deleted.insert(op.id);
         }
@@ -170,7 +210,7 @@ impl TestFramework for WootImpl {
             container.version_vector.push(0);
         }
         assert!(container.version_vector[id.client_id] == id.clock);
-        woot::integrate::<WootImpl>(container, op.clone(), op.left, op.right);
+        fugue::integrate::<FugueImpl>(container, op, &mut ());
 
         container.version_vector[id.client_id] = id.clock + 1;
     }
@@ -190,27 +230,54 @@ impl TestFramework for WootImpl {
 }
 
 #[cfg(test)]
-mod woot_impl_test {
+mod fugue_impl_test {
     use super::*;
+    use crate::test::Action::*;
+
+    #[test]
+    fn simple() {
+        crate::test::test_actions::<FugueImpl>(
+            2,
+            vec![
+                NewOp {
+                    client_id: 0,
+                    pos: 0,
+                },
+                NewOp {
+                    client_id: 1,
+                    pos: 0,
+                },
+                Sync { from: 0, to: 1 },
+                NewOp {
+                    client_id: 1,
+                    pos: 0,
+                },
+                NewOp {
+                    client_id: 0,
+                    pos: 0,
+                },
+            ],
+        );
+    }
 
     #[test]
     fn run() {
-        for i in 0..100 {
-            crate::test::test::<WootImpl>(i, 2, 1000);
-        }
-    }
-
-    #[test]
-    fn run3() {
         for seed in 0..100 {
-            crate::test::test::<WootImpl>(seed, 3, 1000);
+            crate::test::test::<FugueImpl>(seed, 2, 5);
         }
     }
 
     #[test]
-    fn run_n() {
-        for n in 2..10 {
-            crate::test::test::<WootImpl>(123, n, 10000);
+    fn run_3() {
+        for seed in 0..100 {
+            crate::test::test::<FugueImpl>(seed, 3, 1000);
+        }
+    }
+
+    #[test]
+    fn run_10() {
+        for seed in 0..100 {
+            crate::test::test::<FugueImpl>(seed, 10, 1000);
         }
     }
 

@@ -121,11 +121,7 @@ impl TestFramework for YataImpl {
         }
     }
 
-    fn new_op(
-        _rng: &mut impl rand::Rng,
-        container: &mut Self::Container,
-        pos: usize,
-    ) -> Self::OpUnit {
+    fn new_op(container: &mut Self::Container, pos: usize) -> Self::OpUnit {
         let insert_pos = pos % (container.content.len() + 1);
         let (left, right) = if container.content.is_empty() {
             (None, None)

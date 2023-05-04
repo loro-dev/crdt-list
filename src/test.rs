@@ -9,7 +9,7 @@ pub trait TestFramework: ListCrdt {
     fn is_content_eq(a: &Self::Container, b: &Self::Container) -> bool;
     fn new_container(id: usize) -> Self::Container;
     /// pos is just a hint, it may not be a valid position
-    fn new_op(rng: &mut impl Rng, container: &mut Self::Container, pos: usize) -> Self::OpUnit;
+    fn new_op(container: &mut Self::Container, pos: usize) -> Self::OpUnit;
 
     fn new_del_op(container: &Self::Container, pos: usize, len: usize) -> Self::DeleteOp;
     fn integrate_delete_op(container: &mut Self::Container, op: Self::DeleteOp);
@@ -52,7 +52,7 @@ impl Action {
 }
 
 #[derive(Debug)]
-struct Actor<T: TestFramework> {
+pub(crate) struct Actor<T: TestFramework> {
     container: T::Container,
     idx: usize,
     ops: Vec<Vec<T::OpUnit>>,
@@ -134,8 +134,8 @@ impl<T: TestFramework> Actor<T> {
         }
     }
 
-    fn new_op(&mut self, rng: &mut impl Rng, pos: usize) {
-        let value = T::new_op(rng, &mut self.container, pos);
+    fn new_op(&mut self, pos: usize) {
+        let value = T::new_op(&mut self.container, pos);
         self.ops[self.idx].push(value.clone());
         T::integrate(&mut self.container, value);
     }
@@ -149,20 +149,8 @@ impl<T: TestFramework> Actor<T> {
     fn run(actors: &mut [Self], rng: &mut impl Rng, n_actions: usize) {
         for _ in 0..n_actions {
             let action = Self::gen(rng, actors.len());
-            match action {
-                Action::Sync { from, to } => {
-                    let (to_, from_) = arref::array_mut_ref!(actors, [to as usize, from as usize]);
-                    to_.sync(from_);
-                }
-                Action::NewOp { client_id: at, pos } => {
-                    actors[at as usize].new_op(rng, pos as usize)
-                }
-                Action::Delete {
-                    client_id,
-                    pos,
-                    len,
-                } => actors[client_id as usize].new_del_op(pos as usize, len as usize),
-            }
+            // println!("{:#?}, ", &action); // print actions
+            Self::run_action(action, actors);
         }
     }
 
@@ -179,6 +167,21 @@ impl<T: TestFramework> Actor<T> {
             }
         }
     }
+
+    pub(crate) fn run_action(action: Action, actors: &mut [Actor<T>]) {
+        match action {
+            Action::Sync { from, to } => {
+                let (to_, from_) = arref::array_mut_ref!(actors, [to as usize, from as usize]);
+                to_.sync(from_);
+            }
+            Action::NewOp { client_id: at, pos } => actors[at as usize].new_op(pos as usize),
+            Action::Delete {
+                client_id,
+                pos,
+                len,
+            } => actors[client_id as usize].new_del_op(pos as usize, len as usize),
+        }
+    }
 }
 
 pub fn test<T: TestFramework>(seed: u64, n_container: usize, round: usize) {
@@ -192,6 +195,17 @@ pub fn test<T: TestFramework>(seed: u64, n_container: usize, round: usize) {
     Actor::check(&mut containers);
 }
 
+pub fn test_actions<T: TestFramework>(n_container: usize, actions: Vec<Action>) {
+    let mut containers: Vec<Actor<T>> = Vec::new();
+    for i in 0..n_container {
+        containers.push(Actor::new(i as u8, n_container as u8));
+    }
+    for action in actions {
+        Actor::run_action(action, &mut containers);
+    }
+    Actor::check(&mut containers);
+}
+
 pub fn test_with_actions<T: TestFramework>(
     n_container: usize,
     content_len: usize,
@@ -199,7 +213,6 @@ pub fn test_with_actions<T: TestFramework>(
 ) {
     normalize_actions(&mut actions, n_container, content_len);
     let n_container = n_container as u8;
-    let mut rng: StdRng = rand::SeedableRng::seed_from_u64(123);
     let mut actors: Vec<Actor<T>> = Vec::new();
     for i in 0..n_container {
         actors.push(Actor::new(i, n_container));
@@ -217,9 +230,7 @@ pub fn test_with_actions<T: TestFramework>(
                 let (to_, from_) = arref::array_mut_ref!(&mut actors, [to as usize, from as usize]);
                 to_.sync(from_);
             }
-            Action::NewOp { client_id: at, pos } => {
-                actors[*at as usize].new_op(&mut rng, *pos as usize)
-            }
+            Action::NewOp { client_id: at, pos } => actors[*at as usize].new_op(*pos as usize),
             Action::Delete {
                 client_id,
                 pos,
